@@ -147,8 +147,7 @@ func (g *StarlarkGenerator) generateCreateTable(change yaml.Change, schemaOnly b
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "        create_table(\n")
-	fmt.Fprintf(&b, "            name = %q,\n", table.Name)
+	fmt.Fprintf(&b, "        create_table(%q,\n", table.Name)
 
 	if len(table.Fields) > 0 {
 		b.WriteString("            fields = [\n")
@@ -193,7 +192,7 @@ func (g *StarlarkGenerator) generateDropTable(change yaml.Change, schemaOnly, ig
 	if len(extras) > 0 {
 		extra = ", " + strings.Join(extras, ", ")
 	}
-	return fmt.Sprintf("        drop_table(name=%q%s),\n", change.TableName, extra), nil
+	return fmt.Sprintf("        drop_table(%q%s),\n", change.TableName, extra), nil
 }
 
 func (g *StarlarkGenerator) generateRenameTable(change yaml.Change) (string, error) {
@@ -201,7 +200,7 @@ func (g *StarlarkGenerator) generateRenameTable(change yaml.Change) (string, err
 	if !ok {
 		return "", fmt.Errorf("expected string for NewValue in table rename, got %T", change.NewValue)
 	}
-	return fmt.Sprintf("        rename_table(old_name=%q, new_name=%q),\n",
+	return fmt.Sprintf("        rename_table(%q, %q),\n",
 		change.TableName, newName), nil
 }
 
@@ -230,7 +229,7 @@ func (g *StarlarkGenerator) generateDropField(change yaml.Change, schemaOnly, ig
 	if len(extras) > 0 {
 		extra = ", " + strings.Join(extras, ", ")
 	}
-	return fmt.Sprintf("        drop_field(table=%q, field_name=%q%s),\n",
+	return fmt.Sprintf("        drop_field(%q, %q%s),\n",
 		change.TableName, change.FieldName, extra), nil
 }
 
@@ -264,7 +263,7 @@ func (g *StarlarkGenerator) generateAlterField(
 		newField = &f
 	}
 
-	return fmt.Sprintf("        alter_field(\n            table = %q,\n            old_field = %s,\n            new_field = %s,\n        ),\n",
+	return fmt.Sprintf("        alter_field(%q,\n            old_field = %s,\n            new_field = %s,\n        ),\n",
 		change.TableName, generateStarlarkField(*oldField), generateStarlarkField(*newField)), nil
 }
 
@@ -289,7 +288,7 @@ func (g *StarlarkGenerator) generateRenameField(change yaml.Change) (string, err
 	if !ok {
 		return "", fmt.Errorf("expected string for NewValue in field rename, got %T", change.NewValue)
 	}
-	return fmt.Sprintf("        rename_field(table=%q, old_name=%q, new_name=%q),\n",
+	return fmt.Sprintf("        rename_field(%q, %q, %q),\n",
 		change.TableName, change.FieldName, newName), nil
 }
 
@@ -310,7 +309,7 @@ func (g *StarlarkGenerator) generateDropIndex(change yaml.Change, ignoreErrors b
 	if ignoreErrors {
 		extra = ", ignore_errors=True"
 	}
-	return fmt.Sprintf("        drop_index(table=%q, index_name=%q%s),\n",
+	return fmt.Sprintf("        drop_index(%q, %q%s),\n",
 		change.TableName, change.FieldName, extra), nil
 }
 
@@ -329,11 +328,7 @@ func (g *StarlarkGenerator) generateAddForeignKey(change yaml.Change) (string, e
 	}
 
 	var b strings.Builder
-	b.WriteString("        add_foreign_key(\n")
-	fmt.Fprintf(&b, "            table = %q,\n", change.TableName)
-	fmt.Fprintf(&b, "            field_name = %q,\n", change.FieldName)
-	fmt.Fprintf(&b, "            constraint_name = %q,\n", constraintName)
-	fmt.Fprintf(&b, "            referenced_table = %q,\n", field.ForeignKey.Table)
+	fmt.Fprintf(&b, "        add_foreign_key(%q, %q, %q, %q,\n", change.TableName, change.FieldName, constraintName, field.ForeignKey.Table)
 	fmt.Fprintf(&b, "            on_delete = %q,\n", onDelete)
 	if field.ForeignKey.OnUpdate != "" {
 		fmt.Fprintf(&b, "            on_update = %q,\n", field.ForeignKey.OnUpdate)
@@ -349,7 +344,7 @@ func (g *StarlarkGenerator) generateDropForeignKey(change yaml.Change, ignoreErr
 	if ignoreErrors {
 		extra = ", ignore_errors=True"
 	}
-	return fmt.Sprintf("        drop_foreign_key(table=%q, constraint_name=%q%s),\n",
+	return fmt.Sprintf("        drop_foreign_key(%q, %q%s),\n",
 		change.TableName, constraintName, extra), nil
 }
 
@@ -373,12 +368,85 @@ func (g *StarlarkGenerator) generateSetTypeMappings(change yaml.Change) (string,
 // Starlark literal helpers
 // ---------------------------------------------------------------------------
 
-// generateStarlarkField outputs field("name", "type", key=value, ...) with only
-// non-default kwargs included to keep the output clean.
+// knownTypedFields lists field types that have dedicated typed builtins.
+var knownTypedFields = map[string]bool{
+	"uuid": true, "varchar": true, "text": true, "integer": true,
+	"bigint": true, "boolean": true, "timestamp": true, "date": true,
+	"float": true, "jsonb": true, "bytes": true, "decimal": true,
+	"serial": true, "time": true, "foreign_key": true,
+}
+
+// generateStarlarkField outputs a typed field helper (e.g. uuid("id", ...))
+// when possible, falling back to field("name", "type", ...) for unknown types.
 func generateStarlarkField(f yaml.Field) string {
+	if knownTypedFields[f.Type] {
+		return generateTypedStarlarkField(f)
+	}
+	return generateGenericStarlarkField(f)
+}
+
+// generateTypedStarlarkField emits typed builtins like varchar("name", 255, ...).
+func generateTypedStarlarkField(f yaml.Field) string {
+	var positionalArgs string
 	var kwargs []string
 
-	// yaml.Field.Nullable is *bool: nil means "nullable by default" (true).
+	switch f.Type {
+	case "varchar":
+		positionalArgs = fmt.Sprintf("%q, %d", f.Name, f.Length)
+	case "decimal":
+		positionalArgs = fmt.Sprintf("%q, %d, %d", f.Name, f.Precision, f.Scale)
+	case "foreign_key":
+		fkArg := "fk(\"\")"
+		if f.ForeignKey != nil {
+			fkArg = generateStarlarkFK(f.ForeignKey)
+		}
+		positionalArgs = fmt.Sprintf("%q, %s", f.Name, fkArg)
+	default:
+		positionalArgs = fmt.Sprintf("%q", f.Name)
+	}
+
+	nullable := f.Nullable == nil || *f.Nullable
+	if nullable {
+		kwargs = append(kwargs, "nullable=True")
+	}
+	if f.PrimaryKey {
+		kwargs = append(kwargs, "primary_key=True")
+	}
+	if f.Default != "" {
+		kwargs = append(kwargs, fmt.Sprintf("default=%q", f.Default))
+	}
+	// Length/precision/scale only as kwargs for types that don't take them positionally
+	if f.Type != "varchar" && f.Length > 0 {
+		kwargs = append(kwargs, fmt.Sprintf("length=%d", f.Length))
+	}
+	if f.Type != "decimal" && f.Precision > 0 {
+		kwargs = append(kwargs, fmt.Sprintf("precision=%d", f.Precision))
+	}
+	if f.Type != "decimal" && f.Scale > 0 {
+		kwargs = append(kwargs, fmt.Sprintf("scale=%d", f.Scale))
+	}
+	if f.AutoCreate {
+		kwargs = append(kwargs, "auto_create=True")
+	}
+	if f.AutoUpdate {
+		kwargs = append(kwargs, "auto_update=True")
+	}
+	if f.Type != "foreign_key" && f.ManyToMany != nil {
+		kwargs = append(kwargs, fmt.Sprintf("many_to_many=%q", f.ManyToMany.Table))
+	}
+
+	args := positionalArgs
+	if len(kwargs) > 0 {
+		args += ", " + strings.Join(kwargs, ", ")
+	}
+	return fmt.Sprintf("%s(%s)", f.Type, args)
+}
+
+// generateGenericStarlarkField emits the generic field("name", "type", ...) form
+// for types without a dedicated builtin.
+func generateGenericStarlarkField(f yaml.Field) string {
+	var kwargs []string
+
 	if f.Nullable == nil || *f.Nullable {
 		kwargs = append(kwargs, "nullable=True")
 	}

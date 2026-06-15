@@ -91,12 +91,29 @@ func (b *StarlarkBuiltins) Collected() *migrate.Migration {
 // Env returns a starlark.StringDict containing all builtin functions,
 // suitable for injection as the predeclared environment of a Starlark thread.
 func (b *StarlarkBuiltins) Env() starlark.StringDict {
-	return starlark.StringDict{
-		// Leaf builtins — return dicts.
+	env := starlark.StringDict{
+		// Generic leaf builtins — return dicts.
 		"field": starlark.NewBuiltin("field", b.builtinField),
 		"fk":    starlark.NewBuiltin("fk", b.builtinFK),
 		"index": starlark.NewBuiltin("index", b.builtinIndex),
 		"row":   starlark.NewBuiltin("row", b.builtinRow),
+
+		// Typed field builtins — return dicts with type pre-set.
+		"uuid":        starlark.NewBuiltin("uuid", b.typedFieldBuiltin("uuid")),
+		"varchar":     starlark.NewBuiltin("varchar", b.typedVarcharBuiltin()),
+		"text":        starlark.NewBuiltin("text", b.typedFieldBuiltin("text")),
+		"integer":     starlark.NewBuiltin("integer", b.typedFieldBuiltin("integer")),
+		"bigint":      starlark.NewBuiltin("bigint", b.typedFieldBuiltin("bigint")),
+		"boolean":     starlark.NewBuiltin("boolean", b.typedFieldBuiltin("boolean")),
+		"timestamp":   starlark.NewBuiltin("timestamp", b.typedFieldBuiltin("timestamp")),
+		"date":        starlark.NewBuiltin("date", b.typedFieldBuiltin("date")),
+		"float":       starlark.NewBuiltin("float", b.typedFieldBuiltin("float")),
+		"jsonb":       starlark.NewBuiltin("jsonb", b.typedFieldBuiltin("jsonb")),
+		"bytes":       starlark.NewBuiltin("bytes", b.typedFieldBuiltin("bytes")),
+		"decimal":     starlark.NewBuiltin("decimal", b.typedDecimalBuiltin()),
+		"serial":      starlark.NewBuiltin("serial", b.typedFieldBuiltin("serial")),
+		"time":        starlark.NewBuiltin("time", b.typedFieldBuiltin("time")),
+		"foreign_key": starlark.NewBuiltin("foreign_key", b.typedForeignKeyBuiltin()),
 
 		// Operation builtins — return opValue.
 		"migration":         starlark.NewBuiltin("migration", b.builtinMigration),
@@ -116,6 +133,7 @@ func (b *StarlarkBuiltins) Env() starlark.StringDict {
 		"upsert_data":       starlark.NewBuiltin("upsert_data", b.builtinUpsertData),
 		"run_sql":           starlark.NewBuiltin("run_sql", b.builtinRunSQL),
 	}
+	return env
 }
 
 // ---------------------------------------------------------------------------
@@ -159,24 +177,7 @@ func (b *StarlarkBuiltins) builtinField(_ *starlark.Thread, _ *starlark.Builtin,
 		return nil, err
 	}
 
-	d := starlark.NewDict(11)
-	mustSet(d, "name", starlark.String(name))
-	mustSet(d, "type", starlark.String(typ))
-	mustSet(d, "nullable", starlark.Bool(nullable))
-	mustSet(d, "primary_key", starlark.Bool(primaryKey))
-	mustSet(d, "default", starlark.String(dflt))
-	mustSet(d, "length", starlark.MakeInt(length))
-	mustSet(d, "precision", starlark.MakeInt(precision))
-	mustSet(d, "scale", starlark.MakeInt(scale))
-	mustSet(d, "auto_create", starlark.Bool(autoCreate))
-	mustSet(d, "auto_update", starlark.Bool(autoUpdate))
-	if foreignKey != starlark.None {
-		mustSet(d, "foreign_key", foreignKey)
-	}
-	if manyToMany != "" {
-		mustSet(d, "many_to_many", starlark.String(manyToMany))
-	}
-	return d, nil
+	return buildFieldDict(name, typ, nullable, primaryKey, dflt, length, precision, scale, autoCreate, autoUpdate, foreignKey, manyToMany), nil
 }
 
 // builtinFK implements fk(table, **kwargs) → *starlark.Dict.
@@ -246,6 +247,135 @@ func (b *StarlarkBuiltins) builtinRow(_ *starlark.Thread, _ *starlark.Builtin, a
 		}
 	}
 	return d, nil
+}
+
+// ---------------------------------------------------------------------------
+// Typed field builtins — shorthand for field() with the type pre-set.
+// ---------------------------------------------------------------------------
+
+// typedFieldBuiltin returns a builtin for a simple type: type_name(name, **kwargs).
+// Works for uuid, text, integer, bigint, boolean, timestamp, date, float, jsonb, bytes.
+func (b *StarlarkBuiltins) typedFieldBuiltin(typeName string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name       string
+			nullable   bool
+			primaryKey bool
+			dflt       string
+			length     int
+			autoCreate bool
+			autoUpdate bool
+		)
+		if err := starlark.UnpackArgs(typeName, args, kwargs,
+			"name", &name,
+			"nullable?", &nullable,
+			"primary_key?", &primaryKey,
+			"default?", &dflt,
+			"length?", &length,
+			"auto_create?", &autoCreate,
+			"auto_update?", &autoUpdate,
+		); err != nil {
+			return nil, err
+		}
+		return buildFieldDict(name, typeName, nullable, primaryKey, dflt, length, 0, 0, autoCreate, autoUpdate, starlark.None, ""), nil
+	}
+}
+
+// typedVarcharBuiltin returns a builtin for varchar(name, length, **kwargs).
+func (b *StarlarkBuiltins) typedVarcharBuiltin() func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name       string
+			length     int
+			nullable   bool
+			primaryKey bool
+			dflt       string
+			autoCreate bool
+			autoUpdate bool
+		)
+		if err := starlark.UnpackArgs("varchar", args, kwargs,
+			"name", &name,
+			"length", &length,
+			"nullable?", &nullable,
+			"primary_key?", &primaryKey,
+			"default?", &dflt,
+			"auto_create?", &autoCreate,
+			"auto_update?", &autoUpdate,
+		); err != nil {
+			return nil, err
+		}
+		return buildFieldDict(name, "varchar", nullable, primaryKey, dflt, length, 0, 0, autoCreate, autoUpdate, starlark.None, ""), nil
+	}
+}
+
+// typedDecimalBuiltin returns a builtin for decimal(name, precision, scale, **kwargs).
+func (b *StarlarkBuiltins) typedDecimalBuiltin() func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name       string
+			precision  int
+			scale      int
+			nullable   bool
+			primaryKey bool
+			dflt       string
+		)
+		if err := starlark.UnpackArgs("decimal", args, kwargs,
+			"name", &name,
+			"precision", &precision,
+			"scale", &scale,
+			"nullable?", &nullable,
+			"primary_key?", &primaryKey,
+			"default?", &dflt,
+		); err != nil {
+			return nil, err
+		}
+		return buildFieldDict(name, "decimal", nullable, primaryKey, dflt, 0, precision, scale, false, false, starlark.None, ""), nil
+	}
+}
+
+// typedForeignKeyBuiltin returns a builtin for foreign_key(name, fk_dict, **kwargs).
+func (b *StarlarkBuiltins) typedForeignKeyBuiltin() func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name       string
+			fkDict     starlark.Value = starlark.None
+			nullable   bool
+			primaryKey bool
+			dflt       string
+		)
+		if err := starlark.UnpackArgs("foreign_key", args, kwargs,
+			"name", &name,
+			"fk", &fkDict,
+			"nullable?", &nullable,
+			"primary_key?", &primaryKey,
+			"default?", &dflt,
+		); err != nil {
+			return nil, err
+		}
+		return buildFieldDict(name, "foreign_key", nullable, primaryKey, dflt, 0, 0, 0, false, false, fkDict, ""), nil
+	}
+}
+
+// buildFieldDict constructs a field dict from typed parameters.
+func buildFieldDict(name, typ string, nullable, primaryKey bool, dflt string, length, precision, scale int, autoCreate, autoUpdate bool, foreignKey starlark.Value, manyToMany string) *starlark.Dict {
+	d := starlark.NewDict(11)
+	mustSet(d, "name", starlark.String(name))
+	mustSet(d, "type", starlark.String(typ))
+	mustSet(d, "nullable", starlark.Bool(nullable))
+	mustSet(d, "primary_key", starlark.Bool(primaryKey))
+	mustSet(d, "default", starlark.String(dflt))
+	mustSet(d, "length", starlark.MakeInt(length))
+	mustSet(d, "precision", starlark.MakeInt(precision))
+	mustSet(d, "scale", starlark.MakeInt(scale))
+	mustSet(d, "auto_create", starlark.Bool(autoCreate))
+	mustSet(d, "auto_update", starlark.Bool(autoUpdate))
+	if foreignKey != starlark.None {
+		mustSet(d, "foreign_key", foreignKey)
+	}
+	if manyToMany != "" {
+		mustSet(d, "many_to_many", starlark.String(manyToMany))
+	}
+	return d
 }
 
 // ---------------------------------------------------------------------------

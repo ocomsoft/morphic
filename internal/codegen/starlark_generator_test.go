@@ -39,14 +39,12 @@ func TestStarlarkGenerator_CreateTable(t *testing.T) {
 
 	assertContains(t, src, `migration(`)
 	assertContains(t, src, `name = "0001_initial"`)
-	assertContains(t, src, `create_table(`)
-	assertContains(t, src, `name = "users"`)
-	assertContains(t, src, `field("id", "uuid"`)
+	assertContains(t, src, `create_table("users"`)
+	assertContains(t, src, `uuid("id"`)
 	assertContains(t, src, `primary_key=True`)
 	assertContains(t, src, `default="new_uuid"`)
-	assertContains(t, src, `field("email", "varchar"`)
+	assertContains(t, src, `varchar("email", 255`)
 	assertContains(t, src, `nullable=True`)
-	assertContains(t, src, `length=255`)
 	assertContains(t, src, `index("users_email_idx"`)
 	assertContains(t, src, `unique=True`)
 }
@@ -70,7 +68,7 @@ func TestStarlarkGenerator_AddField(t *testing.T) {
 	}
 
 	assertContains(t, src, `add_field("users"`)
-	assertContains(t, src, `field("phone", "varchar"`)
+	assertContains(t, src, `varchar("phone", 20`)
 	assertContains(t, src, `"0001_initial"`)
 }
 
@@ -87,7 +85,7 @@ func TestStarlarkGenerator_DropTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `drop_table(name="old_table")`)
+	assertContains(t, src, `drop_table("old_table")`)
 }
 
 func TestStarlarkGenerator_DropTable_SchemaOnly(t *testing.T) {
@@ -120,7 +118,7 @@ func TestStarlarkGenerator_DropField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `drop_field(table="users", field_name="legacy_col")`)
+	assertContains(t, src, `drop_field("users", "legacy_col")`)
 }
 
 func TestStarlarkGenerator_AlterField(t *testing.T) {
@@ -146,9 +144,9 @@ func TestStarlarkGenerator_AlterField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `alter_field(`)
-	assertContains(t, src, `old_field = field("email", "varchar"`)
-	assertContains(t, src, `new_field = field("email", "varchar"`)
+	assertContains(t, src, `alter_field("users"`)
+	assertContains(t, src, `old_field = varchar("email", 100`)
+	assertContains(t, src, `new_field = varchar("email", 255`)
 }
 
 func TestStarlarkGenerator_RenameField(t *testing.T) {
@@ -164,7 +162,7 @@ func TestStarlarkGenerator_RenameField(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `rename_field(table="users", old_name="fname", new_name="first_name")`)
+	assertContains(t, src, `rename_field("users", "fname", "first_name")`)
 }
 
 func TestStarlarkGenerator_RenameTable(t *testing.T) {
@@ -180,7 +178,7 @@ func TestStarlarkGenerator_RenameTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `rename_table(old_name="old_users", new_name="users")`)
+	assertContains(t, src, `rename_table("old_users", "users")`)
 }
 
 func TestStarlarkGenerator_AddIndex(t *testing.T) {
@@ -218,7 +216,7 @@ func TestStarlarkGenerator_DropIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `drop_index(table="users", index_name="idx_email")`)
+	assertContains(t, src, `drop_index("users", "idx_email")`)
 }
 
 func TestStarlarkGenerator_SetDefaults(t *testing.T) {
@@ -286,10 +284,8 @@ func TestStarlarkGenerator_AddForeignKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `add_foreign_key(`)
-	assertContains(t, src, `table = "orders"`)
-	assertContains(t, src, `field_name = "user_id"`)
-	assertContains(t, src, `referenced_table = "users"`)
+	assertContains(t, src, `add_foreign_key("orders", "user_id"`)
+	assertContains(t, src, `"users"`)
 	assertContains(t, src, `on_delete = "CASCADE"`)
 }
 
@@ -306,7 +302,7 @@ func TestStarlarkGenerator_DropForeignKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
-	assertContains(t, src, `drop_foreign_key(table="orders"`)
+	assertContains(t, src, `drop_foreign_key("orders"`)
 }
 
 func TestStarlarkGenerator_ReviewComment(t *testing.T) {

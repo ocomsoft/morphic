@@ -517,3 +517,71 @@ func TestStarlarkBuiltin_NoMigrationCall(t *testing.T) {
 		t.Error("expected Collected() to be nil before any migration() call")
 	}
 }
+
+func TestStarlarkBuiltin_AutoCreateOnlyOnDatetime(t *testing.T) {
+	// auto_create/auto_update should be accepted on datetime types
+	b := execStar(t, `
+migration(
+    name = "test_datetime",
+    operations = [
+        create_table("events",
+            fields = [
+                timestamp("created_at", auto_create=True),
+                timestamp("updated_at", auto_update=True),
+                date("birth_date", auto_create=True),
+                time("start_time", auto_update=True),
+            ],
+        ),
+    ],
+)
+`)
+	m := b.Collected()
+	if m == nil {
+		t.Fatal("no migration collected")
+	}
+	ct := m.Operations[0].(*migrate.CreateTable)
+	if !ct.Fields[0].AutoCreate {
+		t.Error("expected timestamp auto_create=True")
+	}
+	if !ct.Fields[1].AutoUpdate {
+		t.Error("expected timestamp auto_update=True")
+	}
+	if !ct.Fields[2].AutoCreate {
+		t.Error("expected date auto_create=True")
+	}
+	if !ct.Fields[3].AutoUpdate {
+		t.Error("expected time auto_update=True")
+	}
+}
+
+func TestStarlarkBuiltin_AutoCreateRejectedOnNonDatetime(t *testing.T) {
+	nonDatetimeTypes := []struct {
+		name string
+		src  string
+	}{
+		{"uuid", `uuid("id", auto_create=True)`},
+		{"varchar", `varchar("name", 100, auto_create=True)`},
+		{"text", `text("bio", auto_create=True)`},
+		{"integer", `integer("count", auto_update=True)`},
+		{"bigint", `bigint("total", auto_create=True)`},
+		{"boolean", `boolean("flag", auto_update=True)`},
+		{"float", `float("score", auto_create=True)`},
+		{"jsonb", `jsonb("data", auto_create=True)`},
+		{"bytes", `bytes("blob", auto_update=True)`},
+		{"serial", `serial("seq", auto_create=True)`},
+		{"decimal", `decimal("price", 10, 2, auto_create=True)`},
+		{"foreign_key", `foreign_key("user_id", fk("users"), auto_create=True)`},
+	}
+
+	for _, tc := range nonDatetimeTypes {
+		t.Run(tc.name, func(t *testing.T) {
+			builtins := NewStarlarkBuiltins()
+			thread := &starlark.Thread{Name: "test"}
+			src := tc.src
+			_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", src, builtins.Env())
+			if err == nil {
+				t.Errorf("%s should reject auto_create/auto_update, but accepted it", tc.name)
+			}
+		})
+	}
+}

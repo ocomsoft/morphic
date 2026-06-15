@@ -368,6 +368,11 @@ func (g *StarlarkGenerator) generateSetTypeMappings(change yaml.Change) (string,
 // Starlark literal helpers
 // ---------------------------------------------------------------------------
 
+// isDatetimeType returns true for field types where auto_create/auto_update are meaningful.
+func isDatetimeType(typ string) bool {
+	return typ == "timestamp" || typ == "date" || typ == "time"
+}
+
 // knownTypedFields lists field types that have dedicated typed builtins.
 var knownTypedFields = map[string]bool{
 	"uuid": true, "varchar": true, "text": true, "integer": true,
@@ -425,10 +430,10 @@ func generateTypedStarlarkField(f yaml.Field) string {
 	if f.Type != "decimal" && f.Scale > 0 {
 		kwargs = append(kwargs, fmt.Sprintf("scale=%d", f.Scale))
 	}
-	if f.AutoCreate {
+	if f.AutoCreate && isDatetimeType(f.Type) {
 		kwargs = append(kwargs, "auto_create=True")
 	}
-	if f.AutoUpdate {
+	if f.AutoUpdate && isDatetimeType(f.Type) {
 		kwargs = append(kwargs, "auto_update=True")
 	}
 	if f.Type != "foreign_key" && f.ManyToMany != nil {

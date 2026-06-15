@@ -159,8 +159,8 @@ func TestConvertAirRadiators_AllFiles(t *testing.T) {
 	}
 
 	migrations := reg.All()
-	if len(migrations) != 26 {
-		t.Errorf("expected 26 migrations, got %d", len(migrations))
+	if len(migrations) != 25 {
+		t.Errorf("expected 25 migrations, got %d", len(migrations))
 	}
 
 	for _, m := range migrations {

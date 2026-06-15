@@ -99,20 +99,20 @@ func (b *StarlarkBuiltins) Env() starlark.StringDict {
 		"row":   starlark.NewBuiltin("row", b.builtinRow),
 
 		// Typed field builtins — return dicts with type pre-set.
-		"uuid":        starlark.NewBuiltin("uuid", b.typedFieldBuiltin("uuid")),
+		"uuid":        starlark.NewBuiltin("uuid", b.typedSimpleBuiltin("uuid")),
 		"varchar":     starlark.NewBuiltin("varchar", b.typedVarcharBuiltin()),
-		"text":        starlark.NewBuiltin("text", b.typedFieldBuiltin("text")),
-		"integer":     starlark.NewBuiltin("integer", b.typedFieldBuiltin("integer")),
-		"bigint":      starlark.NewBuiltin("bigint", b.typedFieldBuiltin("bigint")),
-		"boolean":     starlark.NewBuiltin("boolean", b.typedFieldBuiltin("boolean")),
-		"timestamp":   starlark.NewBuiltin("timestamp", b.typedFieldBuiltin("timestamp")),
-		"date":        starlark.NewBuiltin("date", b.typedFieldBuiltin("date")),
-		"float":       starlark.NewBuiltin("float", b.typedFieldBuiltin("float")),
-		"jsonb":       starlark.NewBuiltin("jsonb", b.typedFieldBuiltin("jsonb")),
-		"bytes":       starlark.NewBuiltin("bytes", b.typedFieldBuiltin("bytes")),
+		"text":        starlark.NewBuiltin("text", b.typedSimpleBuiltin("text")),
+		"integer":     starlark.NewBuiltin("integer", b.typedSimpleBuiltin("integer")),
+		"bigint":      starlark.NewBuiltin("bigint", b.typedSimpleBuiltin("bigint")),
+		"boolean":     starlark.NewBuiltin("boolean", b.typedSimpleBuiltin("boolean")),
+		"timestamp":   starlark.NewBuiltin("timestamp", b.typedDatetimeBuiltin("timestamp")),
+		"date":        starlark.NewBuiltin("date", b.typedDatetimeBuiltin("date")),
+		"float":       starlark.NewBuiltin("float", b.typedSimpleBuiltin("float")),
+		"jsonb":       starlark.NewBuiltin("jsonb", b.typedSimpleBuiltin("jsonb")),
+		"bytes":       starlark.NewBuiltin("bytes", b.typedSimpleBuiltin("bytes")),
 		"decimal":     starlark.NewBuiltin("decimal", b.typedDecimalBuiltin()),
-		"serial":      starlark.NewBuiltin("serial", b.typedFieldBuiltin("serial")),
-		"time":        starlark.NewBuiltin("time", b.typedFieldBuiltin("time")),
+		"serial":      starlark.NewBuiltin("serial", b.typedSimpleBuiltin("serial")),
+		"time":        starlark.NewBuiltin("time", b.typedDatetimeBuiltin("time")),
 		"foreign_key": starlark.NewBuiltin("foreign_key", b.typedForeignKeyBuiltin()),
 
 		// Operation builtins — return opValue.
@@ -253,9 +253,10 @@ func (b *StarlarkBuiltins) builtinRow(_ *starlark.Thread, _ *starlark.Builtin, a
 // Typed field builtins — shorthand for field() with the type pre-set.
 // ---------------------------------------------------------------------------
 
-// typedFieldBuiltin returns a builtin for a simple type: type_name(name, **kwargs).
-// Works for uuid, text, integer, bigint, boolean, timestamp, date, float, jsonb, bytes.
-func (b *StarlarkBuiltins) typedFieldBuiltin(typeName string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+// typedSimpleBuiltin returns a builtin for non-datetime types: type_name(name, **kwargs).
+// Works for uuid, text, integer, bigint, boolean, float, jsonb, bytes, serial.
+// Does not accept auto_create/auto_update — those are only meaningful on datetime fields.
+func (b *StarlarkBuiltins) typedSimpleBuiltin(typeName string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
 	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var (
 			name       string
@@ -263,6 +264,29 @@ func (b *StarlarkBuiltins) typedFieldBuiltin(typeName string) func(*starlark.Thr
 			primaryKey bool
 			dflt       string
 			length     int
+		)
+		if err := starlark.UnpackArgs(typeName, args, kwargs,
+			"name", &name,
+			"nullable?", &nullable,
+			"primary_key?", &primaryKey,
+			"default?", &dflt,
+			"length?", &length,
+		); err != nil {
+			return nil, err
+		}
+		return buildFieldDict(name, typeName, nullable, primaryKey, dflt, length, 0, 0, false, false, starlark.None, ""), nil
+	}
+}
+
+// typedDatetimeBuiltin returns a builtin for datetime types: type_name(name, **kwargs).
+// Works for timestamp, date, time. Accepts auto_create/auto_update kwargs.
+func (b *StarlarkBuiltins) typedDatetimeBuiltin(typeName string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	return func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var (
+			name       string
+			nullable   bool
+			primaryKey bool
+			dflt       string
 			autoCreate bool
 			autoUpdate bool
 		)
@@ -271,13 +295,12 @@ func (b *StarlarkBuiltins) typedFieldBuiltin(typeName string) func(*starlark.Thr
 			"nullable?", &nullable,
 			"primary_key?", &primaryKey,
 			"default?", &dflt,
-			"length?", &length,
 			"auto_create?", &autoCreate,
 			"auto_update?", &autoUpdate,
 		); err != nil {
 			return nil, err
 		}
-		return buildFieldDict(name, typeName, nullable, primaryKey, dflt, length, 0, 0, autoCreate, autoUpdate, starlark.None, ""), nil
+		return buildFieldDict(name, typeName, nullable, primaryKey, dflt, 0, 0, 0, autoCreate, autoUpdate, starlark.None, ""), nil
 	}
 }
 
@@ -290,8 +313,6 @@ func (b *StarlarkBuiltins) typedVarcharBuiltin() func(*starlark.Thread, *starlar
 			nullable   bool
 			primaryKey bool
 			dflt       string
-			autoCreate bool
-			autoUpdate bool
 		)
 		if err := starlark.UnpackArgs("varchar", args, kwargs,
 			"name", &name,
@@ -299,12 +320,10 @@ func (b *StarlarkBuiltins) typedVarcharBuiltin() func(*starlark.Thread, *starlar
 			"nullable?", &nullable,
 			"primary_key?", &primaryKey,
 			"default?", &dflt,
-			"auto_create?", &autoCreate,
-			"auto_update?", &autoUpdate,
 		); err != nil {
 			return nil, err
 		}
-		return buildFieldDict(name, "varchar", nullable, primaryKey, dflt, length, 0, 0, autoCreate, autoUpdate, starlark.None, ""), nil
+		return buildFieldDict(name, "varchar", nullable, primaryKey, dflt, length, 0, 0, false, false, starlark.None, ""), nil
 	}
 }
 

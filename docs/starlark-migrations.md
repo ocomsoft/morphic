@@ -15,7 +15,7 @@ migration(
     name = "0001_initial",
     operations = [
         set_defaults({"new_uuid": "gen_random_uuid()", "now": "CURRENT_TIMESTAMP"}),
-        create_table("users",
+        create_table("contact",
             fields = [
                 uuid("id", primary_key=True, default="new_uuid"),
                 varchar("email", 255),
@@ -24,7 +24,7 @@ migration(
                 timestamp("modified_date", nullable=True),
             ],
             indexes = [
-                index("users_email_idx", ["email"], unique=True),
+                index("contact_email_idx", ["email"], unique=True),
             ],
         ),
     ],
@@ -41,8 +41,8 @@ Every `.star` file must call `migration()` exactly once at the top level.
 
 ```starlark
 migration(
-    name = "0025_add_standard_tool",
-    dependencies = ["0024_add_image_to_tmc_tml"],
+    name = "0005_add_job_notes",
+    dependencies = ["0004_add_item_category"],
     operations = [
         # operations go here
     ],
@@ -59,10 +59,10 @@ Dependencies form a directed acyclic graph (DAG). A migration can depend on mult
 
 ```starlark
 migration(
-    name = "0023_drop_tma_entry",
-    dependencies = ["0020_add_missing_view_indexes", "0022_create_missing_indexes"],
+    name = "0008_drop_legacy_table",
+    dependencies = ["0006_add_job_indexes", "0007_migrate_job_data"],
     operations = [
-        drop_table("tma_entry", ignore_errors=True),
+        drop_table("legacy_job", ignore_errors=True),
     ],
 )
 ```
@@ -81,31 +81,36 @@ Each type has a dedicated function with type-appropriate positional arguments:
 |---------|----------------|---------|
 | `uuid(name)` | name | `uuid("id", primary_key=True, default="new_uuid")` |
 | `varchar(name, length)` | name, length | `varchar("email", 255)` |
-| `text(name)` | name | `text("description", nullable=True)` |
-| `integer(name)` | name | `integer("display_order", default="zero")` |
+| `text(name)` | name | `text("notes", nullable=True)` |
+| `integer(name)` | name | `integer("sort_order", default="zero")` |
 | `bigint(name)` | name | `bigint("total_bytes")` |
 | `boolean(name)` | name | `boolean("is_active", default="true")` |
 | `timestamp(name)` | name | `timestamp("created_date", default="now")` |
-| `date(name)` | name | `date("birth_date", nullable=True)` |
+| `date(name)` | name | `date("due_date", nullable=True)` |
 | `time(name)` | name | `time("start_time")` |
-| `float(name)` | name | `float("temperature", nullable=True)` |
-| `decimal(name, precision, scale)` | name, precision, scale | `decimal("price", 10, 2)` |
+| `float(name)` | name | `float("weight", nullable=True)` |
+| `decimal(name, precision, scale)` | name, precision, scale | `decimal("unit_price", 10, 2)` |
 | `jsonb(name)` | name | `jsonb("metadata", default="object")` |
 | `bytes(name)` | name | `bytes("file_data")` |
 | `serial(name)` | name | `serial("seq_no")` |
-| `foreign_key(name, fk)` | name, fk dict | `foreign_key("user_id", fk("auth_user", on_delete="CASCADE"))` |
+| `foreign_key(name, fk)` | name, fk dict | `foreign_key("contact_id", fk("contact", on_delete="CASCADE"))` |
 
-All typed builtins accept these keyword arguments:
+All typed builtins accept these common keyword arguments:
 
 | Keyword | Type | Default | Description |
 |---------|------|---------|-------------|
 | `nullable` | bool | `False` | Allow NULL values |
 | `primary_key` | bool | `False` | Mark as primary key |
 | `default` | string | `""` | Symbolic default name (resolved at runtime via `set_defaults`) |
-| `auto_create` | bool | `False` | Auto-set on row creation |
-| `auto_update` | bool | `False` | Auto-set on row update |
 
-`decimal()` and `foreign_key()` do not accept `auto_create` or `auto_update`.
+Datetime types (`timestamp`, `date`, `time`) also accept:
+
+| Keyword | Type | Default | Description |
+|---------|------|---------|-------------|
+| `auto_create` | bool | `False` | Auto-set on row creation (e.g. `created_at`) |
+| `auto_update` | bool | `False` | Auto-set on row update (e.g. `updated_at`) |
+
+These are only valid on datetime fields — passing them to other types (e.g. `varchar`, `integer`) will raise an error.
 
 ### Generic Field Fallback
 
@@ -136,8 +141,8 @@ field("data", "hstore", default="blank")
 The `fk()` helper builds a foreign key reference dict:
 
 ```starlark
-fk("auth_user", on_delete="CASCADE")
-fk("products", on_delete="SET_NULL", on_update="CASCADE")
+fk("contact", on_delete="CASCADE")
+fk("item", on_delete="SET_NULL", on_update="CASCADE")
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -149,13 +154,13 @@ fk("products", on_delete="SET_NULL", on_update="CASCADE")
 Use `fk()` with the `foreign_key` typed builtin:
 
 ```starlark
-foreign_key("created_user_id", fk("auth_user", on_delete="PROTECT"), nullable=True)
+foreign_key("created_by_id", fk("users", on_delete="PROTECT"), nullable=True)
 ```
 
 Or with the generic `field()`:
 
 ```starlark
-field("owner_id", "uuid", foreign_key=fk("auth_user", on_delete="CASCADE"), nullable=True)
+field("owner_id", "uuid", foreign_key=fk("users", on_delete="CASCADE"), nullable=True)
 ```
 
 ### Indexes
@@ -163,9 +168,9 @@ field("owner_id", "uuid", foreign_key=fk("auth_user", on_delete="CASCADE"), null
 The `index()` helper defines table indexes:
 
 ```starlark
-index("users_email_idx", ["email"], unique=True)
-index("audit_table_record_idx", ["table_name", "record_id"])
-index("data_gin_idx", ["metadata"], method="GIN")
+index("contact_email_idx", ["email"], unique=True)
+index("job_contact_date_idx", ["contact_id", "due_date"])
+index("item_metadata_idx", ["metadata"], method="GIN")
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -185,20 +190,23 @@ index("data_gin_idx", ["metadata"], method="GIN")
 Creates a new table with fields and optional indexes.
 
 ```starlark
-create_table("audit_log",
+create_table("job",
     fields = [
         uuid("id", nullable=True, primary_key=True, default="new_uuid"),
-        varchar("table_name", 255),
-        uuid("record_id"),
-        varchar("action", 50),
-        timestamp("changed_at", default="now"),
-        foreign_key("changed_by_id", fk("auth_user", on_delete="PROTECT"), nullable=True),
-        jsonb("before_data", nullable=True),
-        jsonb("after_data", nullable=True),
+        varchar("title", 255),
+        text("description", nullable=True),
+        varchar("status", 20, default="blank"),
+        decimal("budget", 10, 2, nullable=True),
+        date("due_date", nullable=True),
+        timestamp("created_date", default="now"),
+        timestamp("modified_date", nullable=True),
+        foreign_key("contact_id", fk("contact", on_delete="CASCADE")),
+        foreign_key("created_by_id", fk("users", on_delete="PROTECT"), nullable=True),
     ],
     indexes = [
-        index("audit_log_table_record_idx", ["table_name", "record_id"]),
-        index("audit_log_changed_at_idx", ["changed_at"]),
+        index("job_contact_idx", ["contact_id"]),
+        index("job_status_idx", ["status"]),
+        index("job_due_date_idx", ["due_date"]),
     ],
 )
 ```
@@ -215,7 +223,7 @@ create_table("audit_log",
 Drops a table.
 
 ```starlark
-drop_table("tma_entry", ignore_errors=True)
+drop_table("legacy_job", ignore_errors=True)
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -229,7 +237,7 @@ drop_table("tma_entry", ignore_errors=True)
 Renames a table.
 
 ```starlark
-rename_table("old_users", "users")
+rename_table("item", "product")
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -242,7 +250,7 @@ rename_table("old_users", "users")
 Adds a column to an existing table.
 
 ```starlark
-add_field("wind_tunnel_import_header", varchar("app_version", 50, nullable=True))
+add_field("contact", varchar("phone", 20, nullable=True))
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -256,8 +264,8 @@ add_field("wind_tunnel_import_header", varchar("app_version", 50, nullable=True)
 Removes a column from a table.
 
 ```starlark
-drop_field("stock_lists", "category_code")
-drop_field("stock_lists", "category_id", ignore_errors=True)
+drop_field("contact", "fax_number")
+drop_field("item", "legacy_code", ignore_errors=True)
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -272,7 +280,7 @@ drop_field("stock_lists", "category_id", ignore_errors=True)
 Changes a column's type, length, nullability, or default. Requires both old and new field definitions so the migration can be reversed.
 
 ```starlark
-alter_field("stock_lists",
+alter_field("parts",
     old_field = varchar("part_no", 16, nullable=True),
     new_field = varchar("part_no", 40, nullable=True),
 )
@@ -289,7 +297,7 @@ alter_field("stock_lists",
 Renames a column.
 
 ```starlark
-rename_field("users", "fname", "first_name")
+rename_field("contact", "fname", "first_name")
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -303,8 +311,8 @@ rename_field("users", "fname", "first_name")
 Adds an index to an existing table.
 
 ```starlark
-add_index("users",
-    index("users_email_idx", ["email"], unique=True),
+add_index("contact",
+    index("contact_email_idx", ["email"], unique=True),
 )
 ```
 
@@ -318,8 +326,8 @@ add_index("users",
 Removes an index.
 
 ```starlark
-drop_index("users", "users_email_idx")
-drop_index("orders", "orders_legacy_idx", ignore_errors=True)
+drop_index("contact", "contact_email_idx")
+drop_index("job", "job_legacy_idx", ignore_errors=True)
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -333,8 +341,8 @@ drop_index("orders", "orders_legacy_idx", ignore_errors=True)
 Adds a foreign key constraint to an existing column. This is separate from defining a `foreign_key` field in `create_table` — use this when the FK constraint needs to be added after table creation (e.g., circular references) or when adding a constraint to an existing table.
 
 ```starlark
-add_foreign_key("standard_tool", "created_user_id", "fk_standard_tool_created_user_id", "auth_user",
-    on_delete = "PROTECT",
+add_foreign_key("job", "contact_id", "fk_job_contact_id", "contact",
+    on_delete = "CASCADE",
     ignore_errors = True,
 )
 ```
@@ -354,7 +362,7 @@ add_foreign_key("standard_tool", "created_user_id", "fk_standard_tool_created_us
 Removes a foreign key constraint.
 
 ```starlark
-drop_foreign_key("stock_lists", "fk_stock_lists_category_id", ignore_errors=True)
+drop_foreign_key("job", "fk_job_category_id", ignore_errors=True)
 ```
 
 | Parameter | Position | Type | Required | Description |
@@ -368,9 +376,9 @@ drop_foreign_key("stock_lists", "fk_stock_lists_category_id", ignore_errors=True
 Executes arbitrary SQL. Use for operations that don't have a dedicated builtin (extensions, data backfills, complex DDL).
 
 ```starlark
-# Single-line SQL
+# Data backfill
 run_sql(
-    forward = "UPDATE core_data_file SET title = COALESCE(NULLIF(TRIM(original_file_name), ''), NULLIF(TRIM(core_description), ''))",
+    forward = "UPDATE item SET display_name = COALESCE(NULLIF(TRIM(title), ''), NULLIF(TRIM(sku), ''))",
 )
 
 # Forward and backward SQL
@@ -407,11 +415,12 @@ run_sql(
 Inserts or updates rows in a table. Uses `INSERT ... ON CONFLICT ... DO UPDATE` under the hood.
 
 ```starlark
-upsert_data("part_number_prefix",
-    conflict_keys = ["id"],
+upsert_data("job_status",
+    conflict_keys = ["code"],
     rows = [
-        row(id="6476879f-0d2b-4cf4-a635-c0eb1a6fe98f", letter="A", description_1="'A' SERIES RADS"),
-        row(id="13153dc9-e4b1-444c-892b-5dfb40eb1f6e", letter="B", description_1="'B' SERIES RADS"),
+        row(code="DRAFT", description="Draft", sort_order=1),
+        row(code="OPEN", description="Open", sort_order=2),
+        row(code="CLOSED", description="Closed", sort_order=3),
     ],
 )
 ```
@@ -488,11 +497,16 @@ migration(
             "false": "false",
             "true": "true",
         }),
-        create_table("users",
+        create_table("contact",
             fields = [
                 uuid("id", nullable=True, primary_key=True, default="new_uuid"),
                 varchar("email", 255),
+                varchar("first_name", 100),
+                varchar("last_name", 100),
                 timestamp("created_date", default="now"),
+            ],
+            indexes = [
+                index("contact_email_idx", ["email"], unique=True),
             ],
         ),
     ],
@@ -505,28 +519,27 @@ When a table has foreign keys, define the column with `foreign_key()` in `create
 
 ```starlark
 migration(
-    name = "0025_create_standard_tool",
-    dependencies = ["0024_add_image_to_tmc_tml"],
+    name = "0003_create_job",
+    dependencies = ["0002_create_parts"],
     operations = [
-        create_table("standard_tool",
+        create_table("job",
             fields = [
                 uuid("id", nullable=True, primary_key=True, default="new_uuid"),
-                varchar("name", 60),
-                varchar("source", 3, nullable=True),
-                integer("display_order", default="zero"),
-                timestamp("active_start_date", nullable=True),
-                timestamp("active_end_date", nullable=True),
-                timestamp("created_date"),
+                varchar("title", 120),
+                text("description", nullable=True),
+                integer("priority", default="zero"),
+                timestamp("created_date", default="now"),
                 timestamp("modified_date", nullable=True),
-                foreign_key("created_user_id", fk("auth_user", on_delete="PROTECT"), nullable=True),
-                foreign_key("modified_user_id", fk("auth_user", on_delete="PROTECT"), nullable=True),
+                foreign_key("contact_id", fk("contact", on_delete="CASCADE")),
+                foreign_key("created_by_id", fk("users", on_delete="PROTECT"), nullable=True),
+                foreign_key("modified_by_id", fk("users", on_delete="PROTECT"), nullable=True),
             ],
         ),
-        add_foreign_key("standard_tool", "created_user_id", "fk_standard_tool_created_user_id", "auth_user",
+        add_foreign_key("job", "created_by_id", "fk_job_created_by_id", "users",
             on_delete = "PROTECT",
             ignore_errors = True,
         ),
-        add_foreign_key("standard_tool", "modified_user_id", "fk_standard_tool_modified_user_id", "auth_user",
+        add_foreign_key("job", "modified_by_id", "fk_job_modified_by_id", "users",
             on_delete = "PROTECT",
             ignore_errors = True,
         ),
@@ -540,16 +553,16 @@ Add a column, then populate it with a `run_sql`:
 
 ```starlark
 migration(
-    name = "0007_add_title",
-    dependencies = ["0006_add_app_version"],
+    name = "0004_add_display_name",
+    dependencies = ["0003_create_job"],
     operations = [
-        add_field("core_data_file", varchar("title", 255, nullable=True)),
+        add_field("item", varchar("display_name", 255, nullable=True)),
         run_sql(
-            forward = "UPDATE core_data_file SET title = COALESCE(NULLIF(TRIM(original_file_name), ''), NULLIF(TRIM(core_description), ''))",
+            forward = "UPDATE item SET display_name = COALESCE(NULLIF(TRIM(title), ''), NULLIF(TRIM(sku), ''))",
         ),
-        add_field("input_file", varchar("title", 255, nullable=True)),
+        add_field("contact", varchar("full_name", 200, nullable=True)),
         run_sql(
-            forward = "UPDATE input_file SET title = COALESCE(NULLIF(TRIM(original_file_name), ''), NULLIF(TRIM(name), ''))",
+            forward = "UPDATE contact SET full_name = TRIM(first_name || ' ' || last_name)",
         ),
     ],
 )
@@ -561,10 +574,10 @@ Use `alter_field` with both old and new definitions:
 
 ```starlark
 migration(
-    name = "0015_widen_stock_lists_part_no_to_40",
-    dependencies = ["0014_modify_fields"],
+    name = "0005_widen_part_number",
+    dependencies = ["0004_add_display_name"],
     operations = [
-        alter_field("stock_lists",
+        alter_field("parts",
             old_field = varchar("part_no", 16, nullable=True),
             new_field = varchar("part_no", 40, nullable=True),
         ),
@@ -578,19 +591,32 @@ Use `upsert_data` with `row()` to seed or update reference data:
 
 ```starlark
 migration(
-    name = "0005_set_draft_status",
-    dependencies = ["0004_core_calc_data"],
+    name = "0006_seed_job_status",
+    dependencies = ["0005_widen_part_number"],
     operations = [
-        upsert_data("code_status",
+        upsert_data("job_status",
             conflict_keys = ["id"],
             rows = [
                 row(
                     id="a1b2c3d4-0000-0000-0000-000000000001",
                     code="DRAFT",
-                    description="Draft status",
-                    active_start_date="2024-01-01 00:00:00.000000",
+                    description="Draft - not yet submitted",
+                    sort_order=1,
                     created_date="2024-01-01 00:00:00.000000",
-                    created_user_id="55555555-5555-5555-5555-555555555555",
+                ),
+                row(
+                    id="a1b2c3d4-0000-0000-0000-000000000002",
+                    code="OPEN",
+                    description="Open - in progress",
+                    sort_order=2,
+                    created_date="2024-01-01 00:00:00.000000",
+                ),
+                row(
+                    id="a1b2c3d4-0000-0000-0000-000000000003",
+                    code="CLOSED",
+                    description="Closed - completed",
+                    sort_order=3,
+                    created_date="2024-01-01 00:00:00.000000",
                 ),
             ],
         ),
@@ -604,12 +630,12 @@ Drop foreign key constraints before dropping the column they reference:
 
 ```starlark
 migration(
-    name = "0025_cleanup",
-    dependencies = ["0024_previous"],
+    name = "0007_remove_category",
+    dependencies = ["0006_seed_job_status"],
     operations = [
-        drop_foreign_key("stock_lists", "fk_stock_lists_category_id", ignore_errors=True),
-        drop_field("stock_lists", "category_code"),
-        drop_field("stock_lists", "category_id"),
+        drop_foreign_key("item", "fk_item_category_id", ignore_errors=True),
+        drop_field("item", "category_code"),
+        drop_field("item", "category_id"),
     ],
 )
 ```
@@ -620,8 +646,8 @@ migration(
 
 ```starlark
 migration(
-    name = "0015_custom",
-    dependencies = ["0014_previous"],
+    name = "0010_custom",
+    dependencies = ["0009_previous"],
     operations = [
         # TODO: Add operations here
     ],
@@ -649,8 +675,8 @@ Migration files use the pattern `NNNN_description.star` where `NNNN` is a zero-p
 ```
 migrations/
     0001_initial.star
-    0002_add_audit_log.star
-    0003_add_indexes.star
+    0002_create_parts.star
+    0003_create_job.star
 ```
 
 Files are loaded in alphabetical order, but execution order is determined by the dependency DAG, not filename sort order.

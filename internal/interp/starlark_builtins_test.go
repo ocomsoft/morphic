@@ -5,13 +5,14 @@ import (
 
 	"github.com/ocomsoft/morphic/migrate"
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
 
 func execStar(t *testing.T, src string) *StarlarkBuiltins {
 	t.Helper()
 	builtins := NewStarlarkBuiltins()
 	thread := &starlark.Thread{Name: "test"}
-	_, err := starlark.ExecFile(thread, "test.star", src, builtins.Env())
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", src, builtins.Env())
 	if err != nil {
 		t.Fatalf("starlark exec failed: %v", err)
 	}

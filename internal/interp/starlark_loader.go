@@ -31,6 +31,7 @@ import (
 	"sort"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 
 	"github.com/ocomsoft/morphic/migrate"
 )
@@ -59,7 +60,7 @@ func LoadStarlarkRegistry(migrationsDir string) (*migrate.Registry, error) {
 		builtins := NewStarlarkBuiltins()
 		thread := &starlark.Thread{Name: filepath.Base(path)}
 
-		_, execErr := starlark.ExecFile(thread, filepath.Base(path), data, builtins.Env())
+		_, execErr := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, filepath.Base(path), data, builtins.Env())
 		if execErr != nil {
 			return nil, fmt.Errorf("evaluating %s: %w", path, execErr)
 		}

@@ -128,16 +128,9 @@ func runDumpData(_ *cobra.Command, args []string) error {
 	}
 
 	// Scan for existing migration files.
-	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	migFiles, err := countMigrationFiles(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("scanning migrations directory: %w", err)
-	}
-
-	var migFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migFiles = append(migFiles, f)
-		}
 	}
 
 	// Query DAG for current leaves and schema state.
@@ -236,7 +229,8 @@ func runDumpData(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
 
-	outPath := filepath.Join(migrationsDir, codegen.MigrationFileName(name))
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
+	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing dump-data migration: %w", err)
 	}

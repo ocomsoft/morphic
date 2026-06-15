@@ -31,7 +31,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ocomsoft/morphic/internal/codegen"
 	"github.com/ocomsoft/morphic/internal/config"
 )
 
@@ -77,17 +76,12 @@ func runEmpty(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(configFile)
 	migrationsDir := cfg.Migration.Directory
 
+	gen := newGenerator(cfg)
+
 	// Scan for existing migration files to determine next number and deps.
-	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	migFiles, err := countMigrationFiles(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("scanning migrations directory: %w", err)
-	}
-
-	var migFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migFiles = append(migFiles, f)
-		}
 	}
 
 	// Query DAG for current leaves (dependencies for the new migration).
@@ -110,7 +104,6 @@ func runEmpty(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	gen := codegen.NewBlankGenerator()
 	src, err := gen.GenerateBlank(name, deps)
 	if err != nil {
 		return fmt.Errorf("generating blank migration: %w", err)
@@ -125,7 +118,7 @@ func runEmpty(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
 
-	outPath := filepath.Join(migrationsDir, codegen.MigrationFileName(name))
+	outPath := filepath.Join(migrationsDir, name+gen.FileExtension())
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing blank migration: %w", err)
 	}

@@ -371,19 +371,21 @@ func (b *StarlarkBuiltins) builtinCreateTable(_ *starlark.Thread, _ *starlark.Bu
 	return &opValue{op: op}, nil
 }
 
-// builtinDropTable implements drop_table(name, schema_only=False) → opValue.
+// builtinDropTable implements drop_table(name, schema_only=False, ignore_errors=False) → opValue.
 func (b *StarlarkBuiltins) builtinDropTable(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		name       string
-		schemaOnly bool
+		name         string
+		schemaOnly   bool
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("drop_table", args, kwargs,
 		"name", &name,
 		"schema_only?", &schemaOnly,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
-	return &opValue{op: &migrate.DropTable{Name: name, SchemaOnly: schemaOnly}}, nil
+	return &opValue{op: &migrate.DropTable{Name: name, SchemaOnly: schemaOnly, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinAddField implements add_field(table, field_dict) → opValue.
@@ -405,19 +407,23 @@ func (b *StarlarkBuiltins) builtinAddField(_ *starlark.Thread, _ *starlark.Built
 	return &opValue{op: &migrate.AddField{Table: table, Field: f}}, nil
 }
 
-// builtinDropField implements drop_field(table, field_name) → opValue.
+// builtinDropField implements drop_field(table, field_name, schema_only=False, ignore_errors=False) → opValue.
 func (b *StarlarkBuiltins) builtinDropField(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		table     string
-		fieldName string
+		table        string
+		fieldName    string
+		schemaOnly   bool
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("drop_field", args, kwargs,
 		"table", &table,
 		"field_name", &fieldName,
+		"schema_only?", &schemaOnly,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
-	return &opValue{op: &migrate.DropField{Table: table, Field: fieldName}}, nil
+	return &opValue{op: &migrate.DropField{Table: table, Field: fieldName, SchemaOnly: schemaOnly, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinAlterField implements alter_field(table, old_field, new_field) → opValue.
@@ -497,19 +503,21 @@ func (b *StarlarkBuiltins) builtinAddIndex(_ *starlark.Thread, _ *starlark.Built
 	return &opValue{op: &migrate.AddIndex{Table: table, Index: idx}}, nil
 }
 
-// builtinDropIndex implements drop_index(table, index_name) → opValue.
+// builtinDropIndex implements drop_index(table, index_name, ignore_errors=False) → opValue.
 func (b *StarlarkBuiltins) builtinDropIndex(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		table     string
-		indexName string
+		table        string
+		indexName    string
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("drop_index", args, kwargs,
 		"table", &table,
 		"index_name", &indexName,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
-	return &opValue{op: &migrate.DropIndex{Table: table, Index: indexName}}, nil
+	return &opValue{op: &migrate.DropIndex{Table: table, Index: indexName, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinAddForeignKey implements add_foreign_key(table, field_name, constraint_name,
@@ -522,6 +530,7 @@ func (b *StarlarkBuiltins) builtinAddForeignKey(_ *starlark.Thread, _ *starlark.
 		referencedTable string
 		onDelete        = "CASCADE"
 		onUpdate        string
+		ignoreErrors    bool
 	)
 	if err := starlark.UnpackArgs("add_foreign_key", args, kwargs,
 		"table", &table,
@@ -530,6 +539,7 @@ func (b *StarlarkBuiltins) builtinAddForeignKey(_ *starlark.Thread, _ *starlark.
 		"referenced_table", &referencedTable,
 		"on_delete?", &onDelete,
 		"on_update?", &onUpdate,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
@@ -540,22 +550,25 @@ func (b *StarlarkBuiltins) builtinAddForeignKey(_ *starlark.Thread, _ *starlark.
 		ReferencedTable: referencedTable,
 		OnDelete:        onDelete,
 		OnUpdate:        onUpdate,
+		IgnoreErrors:    ignoreErrors,
 	}}, nil
 }
 
-// builtinDropForeignKey implements drop_foreign_key(table, constraint_name) → opValue.
+// builtinDropForeignKey implements drop_foreign_key(table, constraint_name, ignore_errors=False) → opValue.
 func (b *StarlarkBuiltins) builtinDropForeignKey(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		table          string
 		constraintName string
+		ignoreErrors   bool
 	)
 	if err := starlark.UnpackArgs("drop_foreign_key", args, kwargs,
 		"table", &table,
 		"constraint_name", &constraintName,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
-	return &opValue{op: &migrate.DropForeignKey{Table: table, ConstraintName: constraintName}}, nil
+	return &opValue{op: &migrate.DropForeignKey{Table: table, ConstraintName: constraintName, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinUpsertData implements upsert_data(table, conflict_keys, rows) → opValue.

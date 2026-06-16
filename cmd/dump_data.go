@@ -46,6 +46,7 @@ var (
 	dumpDataConflictKey []string
 	dumpDataDSN         string
 	dumpDataWhere       []string
+	dumpDataJSONL       bool
 )
 
 // dumpDataCmd is the "morphic dump-data" subcommand. It connects to a
@@ -84,7 +85,13 @@ Examples:
   morphic generate dump-data users --where "users:status='active'"
 
   # Apply the same filter to all tables
-  morphic generate dump-data countries currencies --where "active = 1"`,
+  morphic generate dump-data countries currencies --where "active = 1"
+
+  # Write data to JSONL files instead of embedding inline
+  morphic generate dump-data countries --jsonl
+
+  # Combine JSONL with Starlark format (set format=starlark in config)
+  morphic generate dump-data countries --jsonl`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runDumpData,
 }
@@ -104,6 +111,8 @@ func init() {
 		"Full database DSN (overrides host/port/etc)")
 	dumpDataCmd.Flags().StringSliceVar(&dumpDataWhere, "where", nil,
 		`WHERE filter per table; use "table:condition" for per-table or just "condition" for all tables`)
+	dumpDataCmd.Flags().BoolVar(&dumpDataJSONL, "jsonl", false,
+		"Write row data to JSONL files instead of embedding inline")
 
 	// Register DB connection flags bound to existing package-level vars
 	// declared in cmd/db2schema.go.
@@ -161,6 +170,9 @@ func runDumpData(_ *cobra.Command, args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
+	// Build migration name early so JSONL file paths can reference it.
+	name := BuildMigrationName(len(migFiles), dumpDataName, buildDumpAutoName(args))
+
 	// Fetch data for each table.
 	var tables []codegen.TableDump
 
@@ -194,15 +206,29 @@ func runDumpData(_ *cobra.Command, args []string) error {
 			fmt.Printf("  %d rows fetched\n", len(rows))
 		}
 
-		tables = append(tables, codegen.TableDump{
+		td := codegen.TableDump{
 			Table:        tableName,
 			ConflictKeys: conflictKeys,
-			Rows:         rows,
-		})
-	}
+		}
 
-	// Build migration name.
-	name := BuildMigrationName(len(migFiles), dumpDataName, buildDumpAutoName(args))
+		if dumpDataJSONL {
+			dataFileName := fmt.Sprintf("data/%s_%s.jsonl", name, tableName)
+			dataFilePath := filepath.Join(migrationsDir, dataFileName)
+			if writeErr := migrate.WriteJSONL(dataFilePath, rows); writeErr != nil {
+				return fmt.Errorf("writing JSONL for %q: %w", tableName, writeErr)
+			}
+
+			td.DataFile = dataFileName
+
+			if dumpDataVerbose {
+				fmt.Printf("  Wrote %d rows to %s\n", len(rows), dataFilePath)
+			}
+		} else {
+			td.Rows = rows
+		}
+
+		tables = append(tables, td)
+	}
 
 	if dumpDataVerbose {
 		fmt.Printf("Generating migration: %s\n", name)
@@ -211,12 +237,42 @@ func runDumpData(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Generate source.
-	gen := codegen.NewDumpDataGenerator()
+	// Determine output format from config.
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
-	src, err := gen.Generate(name, deps, tables)
-	if err != nil {
-		return fmt.Errorf("generating dump-data migration: %w", err)
+	// Generate source.
+	var src string
+
+	if format == codegen.FormatStarlark {
+		// Build a migrate.Migration from the table dumps and convert to Starlark.
+		var ops []migrate.Operation
+		for _, td := range tables {
+			op := &migrate.UpsertData{
+				Table:        td.Table,
+				ConflictKeys: td.ConflictKeys,
+				Rows:         td.Rows,
+				DataFile:     td.DataFile,
+			}
+			ops = append(ops, op)
+		}
+
+		mig := &migrate.Migration{
+			Name:         name,
+			Dependencies: deps,
+			Operations:   ops,
+		}
+
+		src, err = codegen.ConvertMigrationToStarlark(mig)
+		if err != nil {
+			return fmt.Errorf("generating Starlark dump-data migration: %w", err)
+		}
+	} else {
+		gen := codegen.NewDumpDataGenerator()
+
+		src, err = gen.Generate(name, deps, tables)
+		if err != nil {
+			return fmt.Errorf("generating dump-data migration: %w", err)
+		}
 	}
 
 	if dumpDataDryRun {
@@ -228,8 +284,6 @@ func runDumpData(_ *cobra.Command, args []string) error {
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
-
-	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing dump-data migration: %w", err)

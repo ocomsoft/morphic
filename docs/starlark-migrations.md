@@ -439,6 +439,42 @@ row(id="abc-123", name="Widget", price=19.99, description=None)
 
 Values can be strings, integers, floats, booleans, or `None` (maps to SQL `NULL`).
 
+**Note:** `rows` and `file` are mutually exclusive — use one or the other.
+
+### File-backed upsert data
+
+For large datasets (country codes, postal data, product catalogs), you can store row data in a JSONL file instead of embedding it inline:
+
+```starlark
+upsert_data("countries",
+    conflict_keys = ["code"],
+    file = "data/countries.jsonl",
+)
+```
+
+The `file` parameter is a path relative to the migrations directory. The JSONL file contains one JSON object per line:
+
+```
+{"code":"AU","name":"Australia","population":25687041}
+{"code":"US","name":"United States","population":331002651}
+{"code":"NZ","name":"New Zealand","population":5084300}
+```
+
+JSONL files support:
+- Empty lines (skipped)
+- Comment lines starting with `//` (skipped)
+- All objects must have the same set of keys
+
+The `file` parameter for `upsert_data` accepts these additional parameters when used in place of `rows`:
+
+| Parameter | Position | Type | Required | Description |
+|-----------|----------|------|----------|-------------|
+| `table` | 1st | string | Yes | Table name |
+| `conflict_keys` | keyword | list of strings | Yes | Columns forming the conflict/upsert key |
+| `file` | keyword | string | Yes | Path to JSONL file, relative to the migrations directory |
+
+Using `file=` keeps migration files concise and allows large reference datasets to be reviewed and diff'd independently of the migration logic. This is the recommended approach for any dataset with more than a handful of rows.
+
 ### set_defaults
 
 Registers symbolic default names that field `default=` values resolve to at runtime. Must appear before any operation that uses the symbolic defaults.

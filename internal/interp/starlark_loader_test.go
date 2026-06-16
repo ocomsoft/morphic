@@ -139,18 +139,44 @@ migration(
 	}
 }
 
-func TestLoadRegistry_MixedFormatsError(t *testing.T) {
+func TestLoadRegistry_MixedFormats(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0001.go"), []byte("package main\nfunc init() {}\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "0002.star"), []byte("migration(name='t', operations=[])"), 0644); err != nil {
+
+	// A Go migration that registers via init().
+	goSrc := `package main
+
+import m "github.com/ocomsoft/morphic/migrate"
+
+func init() {
+	m.Register(&m.Migration{
+		Name:       "0001_go_mig",
+		Operations: []m.Operation{},
+	})
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "0001_go_mig.go"), []byte(goSrc), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := LoadRegistry(dir)
-	if err == nil {
-		t.Fatal("expected error for mixed formats")
+	// A Starlark migration.
+	starSrc := `migration(name="0002_star_mig", dependencies=["0001_go_mig"], operations=[])`
+	if err := os.WriteFile(filepath.Join(dir, "0002_star_mig.star"), []byte(starSrc), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := LoadRegistry(dir)
+	if err != nil {
+		t.Fatalf("LoadRegistry error: %v", err)
+	}
+	all := reg.All()
+	if len(all) != 2 {
+		t.Fatalf("expected 2 migrations, got %d", len(all))
+	}
+	if all[0].Name != "0001_go_mig" {
+		t.Errorf("expected first migration '0001_go_mig', got %q", all[0].Name)
+	}
+	if all[1].Name != "0002_star_mig" {
+		t.Errorf("expected second migration '0002_star_mig', got %q", all[1].Name)
 	}
 }
 

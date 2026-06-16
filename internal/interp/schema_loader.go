@@ -39,8 +39,9 @@ import (
 )
 
 // LoadSchema auto-detects the schema format in schemaDir and returns a
-// *types.Schema. It looks for schema.star and schema.yaml. If both exist
-// it returns an error; if neither exists it also returns an error.
+// *types.Schema. It looks for schema.star and schema.yaml. When both exist,
+// schema.star takes precedence (the Starlark file is assumed to be the
+// canonical source). If neither exists it returns an error.
 func LoadSchema(schemaDir string, verbose bool) (*types.Schema, error) {
 	starPath := filepath.Join(schemaDir, "schema.star")
 	yamlPath := filepath.Join(schemaDir, "schema.yaml")
@@ -49,8 +50,6 @@ func LoadSchema(schemaDir string, verbose bool) (*types.Schema, error) {
 	hasYAML := fileExists(yamlPath)
 
 	switch {
-	case hasStar && hasYAML:
-		return nil, fmt.Errorf("found both schema.star and schema.yaml in %s; use only one format", schemaDir)
 	case !hasStar && !hasYAML:
 		return nil, fmt.Errorf("no schema file found in %s (expected schema.star or schema.yaml)", schemaDir)
 	case hasStar:

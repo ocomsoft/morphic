@@ -55,8 +55,11 @@ import (
 const virtualPkg = "migrations"
 
 // LoadRegistry auto-detects the migration format in migrationsDir and loads
-// all migrations into a *migrate.Registry. If both .go and .star files exist,
-// it returns an error (mixed formats are not supported).
+// all migrations into a *migrate.Registry. Both .go and .star files are
+// supported in the same directory — legacy Go migrations coexist with newer
+// Starlark ones. Duplicate migration names across formats are an error (the
+// registry panics on duplicate Register calls, same as two .go files with the
+// same name).
 func LoadRegistry(migrationsDir string) (*migrate.Registry, error) {
 	goFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
 	starFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.star"))
@@ -73,14 +76,27 @@ func LoadRegistry(migrationsDir string) (*migrate.Registry, error) {
 	hasGo := len(goMigFiles) > 0
 	hasStar := len(starFiles) > 0
 
-	if hasGo && hasStar {
-		return nil, fmt.Errorf("mixed migration formats: found both .go and .star files in %s", migrationsDir)
-	}
-
-	if hasStar {
+	switch {
+	case hasGo && hasStar:
+		// Load both formats and merge into a single registry.
+		goReg, err := LoadGoRegistry(migrationsDir)
+		if err != nil {
+			return nil, err
+		}
+		starReg, err := LoadStarlarkRegistry(migrationsDir)
+		if err != nil {
+			return nil, err
+		}
+		// Merge Starlark migrations into the Go registry.
+		for _, m := range starReg.All() {
+			goReg.Register(m)
+		}
+		return goReg, nil
+	case hasStar:
 		return LoadStarlarkRegistry(migrationsDir)
+	default:
+		return LoadGoRegistry(migrationsDir)
 	}
-	return LoadGoRegistry(migrationsDir)
 }
 
 // LoadGoRegistry reads every *.go file in migrationsDir (except main.go),

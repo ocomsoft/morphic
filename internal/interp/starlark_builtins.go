@@ -720,20 +720,31 @@ func (b *StarlarkBuiltins) builtinDropForeignKey(_ *starlark.Thread, _ *starlark
 	return &opValue{op: &migrate.DropForeignKey{Table: table, ConstraintName: constraintName, IgnoreErrors: ignoreErrors}}, nil
 }
 
-// builtinUpsertData implements upsert_data(table, conflict_keys, rows) → opValue.
-// rows is a list of dicts (each produced by row()).
+// builtinUpsertData implements upsert_data(table, conflict_keys, rows?, file?) → opValue.
+// rows is a list of dicts (each produced by row()). file is a path to a JSONL data file.
+// rows and file are mutually exclusive; exactly one must be provided.
 func (b *StarlarkBuiltins) builtinUpsertData(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		table        string
 		conflictKeys *starlark.List
 		rows         *starlark.List
+		file         string
 	)
 	if err := starlark.UnpackArgs("upsert_data", args, kwargs,
 		"table", &table,
 		"conflict_keys", &conflictKeys,
-		"rows", &rows,
+		"rows?", &rows,
+		"file?", &file,
 	); err != nil {
 		return nil, err
+	}
+
+	// Validate: rows and file are mutually exclusive, one is required
+	if rows != nil && file != "" {
+		return nil, fmt.Errorf("upsert_data: rows and file are mutually exclusive")
+	}
+	if rows == nil && file == "" {
+		return nil, fmt.Errorf("upsert_data: one of rows or file is required")
 	}
 
 	ck, err := stringListToSlice(conflictKeys)
@@ -741,6 +752,16 @@ func (b *StarlarkBuiltins) builtinUpsertData(_ *starlark.Thread, _ *starlark.Bui
 		return nil, fmt.Errorf("upsert_data: conflict_keys: %w", err)
 	}
 
+	// File-backed mode
+	if file != "" {
+		return &opValue{op: &migrate.UpsertData{
+			Table:        table,
+			ConflictKeys: ck,
+			DataFile:     file,
+		}}, nil
+	}
+
+	// Inline rows mode (existing behavior)
 	var goRows []map[string]any
 	if rows != nil {
 		for i := 0; i < rows.Len(); i++ {

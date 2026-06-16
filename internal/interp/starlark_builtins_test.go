@@ -1,12 +1,18 @@
 package interp
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/migrate"
 	"go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
+
+// containsStr checks if s contains substr.
+func containsStr(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
 
 func execStar(t *testing.T, src string) *StarlarkBuiltins {
 	t.Helper()
@@ -196,6 +202,95 @@ migration(
 	}
 	if ud.Rows[0]["code"] != "AU" {
 		t.Errorf("expected row[0].code='AU', got %v", ud.Rows[0]["code"])
+	}
+}
+
+func TestStarlarkBuiltin_UpsertData_FileKwarg(t *testing.T) {
+	b := execStar(t, `
+migration(
+    name = "0002_seed",
+    dependencies = ["0001_initial"],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+            file = "data/countries.jsonl",
+        ),
+    ],
+)
+`)
+
+	m := b.Collected()
+	if m == nil {
+		t.Fatal("no migration collected")
+	}
+	if len(m.Operations) != 1 {
+		t.Fatalf("expected 1 operation, got %d", len(m.Operations))
+	}
+
+	ud, ok := m.Operations[0].(*migrate.UpsertData)
+	if !ok {
+		t.Fatalf("expected *migrate.UpsertData, got %T", m.Operations[0])
+	}
+	if ud.DataFile != "data/countries.jsonl" {
+		t.Errorf("expected DataFile 'data/countries.jsonl', got %q", ud.DataFile)
+	}
+	if ud.Rows != nil {
+		t.Errorf("expected Rows to be nil, got %v", ud.Rows)
+	}
+	if ud.Table != "countries" {
+		t.Errorf("expected table 'countries', got %q", ud.Table)
+	}
+	if len(ud.ConflictKeys) != 1 || ud.ConflictKeys[0] != "code" {
+		t.Errorf("expected conflict_keys ['code'], got %v", ud.ConflictKeys)
+	}
+}
+
+func TestStarlarkBuiltin_UpsertData_BothRowsAndFile(t *testing.T) {
+	builtins := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
+migration(
+    name = "0002_seed",
+    dependencies = ["0001_initial"],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+            rows = [{"code": "AU"}],
+            file = "data/countries.jsonl",
+        ),
+    ],
+)
+`, builtins.Env())
+	if err == nil {
+		t.Fatal("expected error when both rows and file are provided")
+	}
+	if !containsStr(err.Error(), "mutually exclusive") {
+		t.Errorf("expected error to contain 'mutually exclusive', got: %v", err)
+	}
+}
+
+func TestStarlarkBuiltin_UpsertData_NeitherRowsNorFile(t *testing.T) {
+	builtins := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
+migration(
+    name = "0002_seed",
+    dependencies = ["0001_initial"],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+        ),
+    ],
+)
+`, builtins.Env())
+	if err == nil {
+		t.Fatal("expected error when neither rows nor file is provided")
+	}
+	if !containsStr(err.Error(), "one of rows or file is required") {
+		t.Errorf("expected error to contain 'one of rows or file is required', got: %v", err)
 	}
 }
 

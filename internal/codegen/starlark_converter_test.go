@@ -3,6 +3,7 @@ package codegen_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/internal/codegen"
@@ -142,6 +143,84 @@ func TestConvertMigrationToStarlark_UpsertData(t *testing.T) {
 	}
 	if len(ud.Rows) != 2 {
 		t.Errorf("expected 2 rows, got %d", len(ud.Rows))
+	}
+}
+
+// TestConvertUpsertData_WithDataFile verifies that a UpsertData with DataFile set
+// emits file= instead of rows= in the Starlark output.
+func TestConvertUpsertData_WithDataFile(t *testing.T) {
+	m := &migrate.Migration{
+		Name:         "0005_countries",
+		Dependencies: []string{"0004_prev"},
+		Operations: []migrate.Operation{
+			&migrate.UpsertData{
+				Table:        "countries",
+				ConflictKeys: []string{"code"},
+				DataFile:     "data/countries.jsonl",
+			},
+		},
+	}
+
+	src, err := codegen.ConvertMigrationToStarlark(m)
+	if err != nil {
+		t.Fatalf("ConvertMigrationToStarlark: %v", err)
+	}
+
+	if !strings.Contains(src, `file = "data/countries.jsonl"`) {
+		t.Errorf("expected file = \"data/countries.jsonl\" in output, got:\n%s", src)
+	}
+	if strings.Contains(src, "rows =") {
+		t.Errorf("expected no rows = in output when DataFile is set, got:\n%s", src)
+	}
+}
+
+// TestConvertUpsertData_WithDataFile_RoundTrip converts a Go migration with DataFile
+// to Starlark, then loads it via the interpreter and verifies the resulting UpsertData.
+func TestConvertUpsertData_WithDataFile_RoundTrip(t *testing.T) {
+	m := &migrate.Migration{
+		Name:         "0006_seed_file",
+		Dependencies: []string{"0005_prev"},
+		Operations: []migrate.Operation{
+			&migrate.UpsertData{
+				Table:        "regions",
+				ConflictKeys: []string{"id"},
+				DataFile:     "data/regions.jsonl",
+			},
+		},
+	}
+
+	src, err := codegen.ConvertMigrationToStarlark(m)
+	if err != nil {
+		t.Fatalf("ConvertMigrationToStarlark: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "0006_seed_file.star"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := interp.LoadStarlarkRegistry(dir)
+	if err != nil {
+		t.Fatalf("LoadStarlarkRegistry: %v\n\nSource:\n%s", err, src)
+	}
+
+	loaded := reg.All()
+	if len(loaded) != 1 {
+		t.Fatalf("expected 1 migration, got %d", len(loaded))
+	}
+
+	ud, ok := loaded[0].Operations[0].(*migrate.UpsertData)
+	if !ok {
+		t.Fatalf("expected UpsertData, got %T", loaded[0].Operations[0])
+	}
+	if ud.DataFile != "data/regions.jsonl" {
+		t.Errorf("expected DataFile = %q, got %q", "data/regions.jsonl", ud.DataFile)
+	}
+	if ud.Table != "regions" {
+		t.Errorf("expected Table = %q, got %q", "regions", ud.Table)
+	}
+	if len(ud.Rows) != 0 {
+		t.Errorf("expected no rows when DataFile is set, got %d", len(ud.Rows))
 	}
 }
 

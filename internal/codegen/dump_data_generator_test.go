@@ -133,6 +133,66 @@ func TestDumpDataGenerator_EmptyTables(t *testing.T) {
 	}
 }
 
+// TestDumpDataGenerator_WriteUpsertData_WithDataFile verifies that when DataFile is set,
+// the generated Go source contains DataFile: and does not contain Rows:.
+func TestDumpDataGenerator_WriteUpsertData_WithDataFile(t *testing.T) {
+	g := codegen.NewDumpDataGenerator()
+	tables := []codegen.TableDump{
+		{
+			Table:        "countries",
+			ConflictKeys: []string{"code"},
+			DataFile:     "data/countries.jsonl",
+		},
+	}
+
+	src, err := g.Generate("0005_dump_countries", []string{"0004_prev"}, tables)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// Verify the output compiles as valid Go via format.Source.
+	if _, err := format.Source([]byte(src)); err != nil {
+		t.Fatalf("generated source does not compile: %v\nSource:\n%s", err, src)
+	}
+
+	if !strings.Contains(src, `DataFile:`) {
+		t.Errorf("expected DataFile: in output, got:\n%s", src)
+	}
+	if !strings.Contains(src, `"data/countries.jsonl"`) {
+		t.Errorf("expected data file path in output, got:\n%s", src)
+	}
+	if strings.Contains(src, "Rows:") {
+		t.Errorf("expected no Rows: in output when DataFile is set, got:\n%s", src)
+	}
+}
+
+// TestDumpDataGenerator_WriteUpsertData_WithRows verifies that when DataFile is empty,
+// the generated Go source contains Rows: and does not contain DataFile:.
+func TestDumpDataGenerator_WriteUpsertData_WithRows(t *testing.T) {
+	g := codegen.NewDumpDataGenerator()
+	tables := []codegen.TableDump{
+		{
+			Table:        "config",
+			ConflictKeys: []string{"key"},
+			Rows: []map[string]any{
+				{"key": "version", "value": "1.0"},
+			},
+		},
+	}
+
+	src, err := g.Generate("0006_dump_config", []string{"0005_prev"}, tables)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	if !strings.Contains(src, "Rows:") {
+		t.Errorf("expected Rows: in output, got:\n%s", src)
+	}
+	if strings.Contains(src, "DataFile:") {
+		t.Errorf("expected no DataFile: in output when rows are provided, got:\n%s", src)
+	}
+}
+
 func TestDumpDataGenerator_NoDeps(t *testing.T) {
 	g := codegen.NewDumpDataGenerator()
 	tables := []codegen.TableDump{

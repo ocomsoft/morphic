@@ -386,6 +386,35 @@ func TestLoadDefaultURLEnvOverride(t *testing.T) {
 	}
 }
 
+func TestMigrationFormatFromConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	content := `migration:
+  directory: migrations
+  format: starlark
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if cfg.Migration.Format != "starlark" {
+		t.Errorf("expected migration format 'starlark', got %q", cfg.Migration.Format)
+	}
+}
+
+func TestMigrationFormatDefault(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Migration.Format != "go" {
+		t.Errorf("expected default migration format 'go', got %q", cfg.Migration.Format)
+	}
+}
+
 func TestLoadWithEnvOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")

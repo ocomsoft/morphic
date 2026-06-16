@@ -56,6 +56,7 @@ type DatabaseConfig struct {
 // MigrationConfig contains migration-related settings
 type MigrationConfig struct {
 	Directory string `yaml:"directory" mapstructure:"directory"` // Directory for migration files
+	Format    string `yaml:"format" mapstructure:"format"`       // Output format: go or starlark
 }
 
 // OutputConfig contains output formatting settings
@@ -72,6 +73,7 @@ func DefaultConfig() *Config {
 		},
 		Migration: MigrationConfig{
 			Directory: "migrations",
+			Format:    "go",
 		},
 		Output: OutputConfig{
 			Verbose:      false,
@@ -181,6 +183,7 @@ func setDefaults(v *viper.Viper, cfg *Config) {
 	v.SetDefault("database.type", cfg.Database.Type)
 	v.SetDefault("database.default_url", cfg.Database.DefaultURL)
 	v.SetDefault("migration.directory", cfg.Migration.Directory)
+	v.SetDefault("migration.format", cfg.Migration.Format)
 	v.SetDefault("output.verbose", cfg.Output.Verbose)
 	v.SetDefault("output.color_enabled", cfg.Output.ColorEnabled)
 }

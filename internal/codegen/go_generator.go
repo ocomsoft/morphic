@@ -585,6 +585,17 @@ func main() {
 `
 }
 
+// GenerateBlank generates a blank migration .go file with a TODO placeholder.
+func (g *GoGenerator) GenerateBlank(name string, deps []string) (string, error) {
+	bg := &BlankGenerator{}
+	return bg.GenerateBlank(name, deps)
+}
+
+// FileExtension returns ".go".
+func (g *GoGenerator) FileExtension() string {
+	return ".go"
+}
+
 // GenerateGoMod returns a go.mod file content string for the generated migrations
 // module. moduleName is the module path (e.g. "myproject/migrations"), version
 // is the morphic version to require (e.g. "v0.3.0" or "main"), and

@@ -54,14 +54,43 @@ import (
 // package named `main`, so we rename it before evaluation.
 const virtualPkg = "migrations"
 
-// LoadRegistry reads every *.go file in migrationsDir (except main.go),
+// LoadRegistry auto-detects the migration format in migrationsDir and loads
+// all migrations into a *migrate.Registry. If both .go and .star files exist,
+// it returns an error (mixed formats are not supported).
+func LoadRegistry(migrationsDir string) (*migrate.Registry, error) {
+	goFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	starFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.star"))
+
+	// Filter out main.go and test files from Go file count.
+	var goMigFiles []string
+	for _, f := range goFiles {
+		base := filepath.Base(f)
+		if base != "main.go" && !strings.HasSuffix(base, "_test.go") {
+			goMigFiles = append(goMigFiles, f)
+		}
+	}
+
+	hasGo := len(goMigFiles) > 0
+	hasStar := len(starFiles) > 0
+
+	if hasGo && hasStar {
+		return nil, fmt.Errorf("mixed migration formats: found both .go and .star files in %s", migrationsDir)
+	}
+
+	if hasStar {
+		return LoadStarlarkRegistry(migrationsDir)
+	}
+	return LoadGoRegistry(migrationsDir)
+}
+
+// LoadGoRegistry reads every *.go file in migrationsDir (except main.go),
 // interprets them with yaegi, and returns a freshly-populated *migrate.Registry.
 //
 // Each migration file's init() calls migrate.Register, which is intercepted
 // here and routed into the returned registry rather than the package-level
 // global. This lets the function be called multiple times in a single process
 // without duplicate-registration panics.
-func LoadRegistry(migrationsDir string) (*migrate.Registry, error) {
+func LoadGoRegistry(migrationsDir string) (*migrate.Registry, error) {
 	files, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
 	if err != nil {
 		return nil, fmt.Errorf("scanning migrations directory: %w", err)

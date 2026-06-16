@@ -25,6 +25,8 @@ SOFTWARE.
 package migrate_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -282,5 +284,126 @@ func TestUpsertData_Up_ColumnOrder(t *testing.T) {
 	posZ := strings.Index(sql, "z_key")
 	if posA >= posM || posM >= posZ {
 		t.Errorf("expected alphabetical column order in SQL:\n%s", sql)
+	}
+}
+
+// TestUpsertData_Describe_WithDataFile verifies the description when DataFile
+// is set and Rows is nil.
+func TestUpsertData_Describe_WithDataFile(t *testing.T) {
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		DataFile:     "data/x.jsonl",
+	}
+	want := "Upsert rows from data/x.jsonl into countries"
+	if got := op.Describe(); got != want {
+		t.Errorf("Describe: got %q, want %q", got, want)
+	}
+}
+
+// TestUpsertData_DataFileResolver_Interface verifies that *UpsertData
+// implements the DataFileResolver interface.
+func TestUpsertData_DataFileResolver_Interface(t *testing.T) {
+	var _ migrate.DataFileResolver = (*migrate.UpsertData)(nil)
+}
+
+// TestUpsertData_Up_WithDataFile creates a temp JSONL file, wires up
+// UpsertData via SetBasePath, and verifies Up produces the same SQL as
+// an inline-equivalent operation.
+func TestUpsertData_Up_WithDataFile(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	jsonlPath := filepath.Join(dataDir, "countries.jsonl")
+	content := `{"code":"AU","name":"Australia"}
+{"code":"US","name":"United States"}
+`
+	if err := os.WriteFile(jsonlPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write jsonl: %v", err)
+	}
+
+	// File-backed operation.
+	fileBacked := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		DataFile:     "data/countries.jsonl",
+	}
+	fileBacked.SetBasePath(dir)
+
+	// Inline equivalent.
+	inline := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		Rows: []map[string]any{
+			{"code": "AU", "name": "Australia"},
+			{"code": "US", "name": "United States"},
+		},
+	}
+
+	p := postgresql.New()
+	sqlFile, err := fileBacked.Up(p, nil, nil)
+	if err != nil {
+		t.Fatalf("file-backed Up error: %v", err)
+	}
+	sqlInline, err := inline.Up(p, nil, nil)
+	if err != nil {
+		t.Fatalf("inline Up error: %v", err)
+	}
+	if sqlFile != sqlInline {
+		t.Errorf("SQL mismatch.\nfile-backed:\n%s\ninline:\n%s", sqlFile, sqlInline)
+	}
+}
+
+// TestUpsertData_Down_WithDataFile verifies that Down with a DataFile
+// produces the same DELETE statements as inline rows.
+func TestUpsertData_Down_WithDataFile(t *testing.T) {
+	dir := t.TempDir()
+	jsonlPath := filepath.Join(dir, "countries.jsonl")
+	content := `{"code":"AU","name":"Australia"}
+{"code":"US","name":"United States"}
+`
+	if err := os.WriteFile(jsonlPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write jsonl: %v", err)
+	}
+
+	fileBacked := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		DataFile:     "countries.jsonl",
+	}
+	fileBacked.SetBasePath(dir)
+
+	p := postgresql.New()
+	sql, err := fileBacked.Down(p, nil, nil)
+	if err != nil {
+		t.Fatalf("Down error: %v", err)
+	}
+	if !strings.Contains(sql, "DELETE FROM") {
+		t.Errorf("expected DELETE FROM in SQL, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "'AU'") || !strings.Contains(sql, "'US'") {
+		t.Errorf("expected conflict key values in DELETE, got:\n%s", sql)
+	}
+}
+
+// TestUpsertData_Up_DataFileMissing verifies that a nonexistent DataFile
+// produces an error.
+func TestUpsertData_Up_DataFileMissing(t *testing.T) {
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		DataFile:     "nonexistent.jsonl",
+	}
+	op.SetBasePath(t.TempDir())
+
+	p := postgresql.New()
+	_, err := op.Up(p, nil, nil)
+	if err == nil {
+		t.Fatal("expected error for missing data file, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
 	}
 }

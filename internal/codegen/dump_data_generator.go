@@ -35,6 +35,7 @@ type TableDump struct {
 	Table        string           // target table name
 	ConflictKeys []string         // PK or unique columns for ON CONFLICT
 	Rows         []map[string]any // row data (all rows same keys)
+	DataFile     string           // if set, emit DataFile instead of Rows
 }
 
 // DumpDataGenerator generates Go migration source containing UpsertData operations.
@@ -99,16 +100,21 @@ func (g *DumpDataGenerator) writeUpsertData(b *strings.Builder, td TableDump) er
 	}
 	fmt.Fprintf(b, "\t\t\t\tConflictKeys: []string{%s},\n", strings.Join(keyStrs, ", "))
 
-	// Rows
-	b.WriteString("\t\t\t\tRows: []map[string]any{\n")
-	for _, row := range td.Rows {
-		b.WriteString("\t\t\t\t\t{\n")
-		for _, key := range sortedMapKeys(row) {
-			fmt.Fprintf(b, "\t\t\t\t\t\t%q: %s,\n", key, formatGoLiteral(row[key]))
+	// DataFile takes precedence over Rows when set
+	if td.DataFile != "" {
+		fmt.Fprintf(b, "\t\t\t\tDataFile: %q,\n", td.DataFile)
+	} else {
+		// Rows
+		b.WriteString("\t\t\t\tRows: []map[string]any{\n")
+		for _, row := range td.Rows {
+			b.WriteString("\t\t\t\t\t{\n")
+			for _, key := range sortedMapKeys(row) {
+				fmt.Fprintf(b, "\t\t\t\t\t\t%q: %s,\n", key, formatGoLiteral(row[key]))
+			}
+			b.WriteString("\t\t\t\t\t},\n")
 		}
-		b.WriteString("\t\t\t\t\t},\n")
+		b.WriteString("\t\t\t\t},\n")
 	}
-	b.WriteString("\t\t\t\t},\n")
 
 	b.WriteString("\t\t\t},\n")
 	return nil

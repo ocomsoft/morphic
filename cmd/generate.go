@@ -55,6 +55,7 @@ var (
 	goMigName        string
 	goMigVerbose     bool
 	goMigAutoApprove bool
+	goMigFormat      string
 )
 
 // goMigrationsCmd is the Cobra command for generating Go migration files from
@@ -94,6 +95,8 @@ func init() {
 		"Show detailed output")
 	goMigrationsCmd.Flags().BoolVar(&goMigAutoApprove, "auto-approve", false,
 		"Automatically approve all destructive operations without prompting (for CI/non-TTY environments)")
+	goMigrationsCmd.Flags().StringVar(&goMigFormat, "format", "",
+		"Output format: go or starlark (overrides config)")
 }
 
 // runGoMakeMigrations is the main entry point for Go migration generation.
@@ -106,23 +109,20 @@ func init() {
 func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(configFile)
 	migrationsDir := cfg.Migration.Directory
-	gen := codegen.NewGoGenerator()
 
-	// 1. Query existing DAG (if any .go files exist)
+	// Override format from --format flag if provided.
+	if goMigFormat != "" {
+		cfg.Migration.Format = goMigFormat
+	}
+	gen := newGenerator(cfg)
+
+	// 1. Query existing DAG (if any migration files exist)
 	var dagOut *migrate.DAGOutput
 	var prevSchema *yamlpkg.Schema
 
-	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	migFiles, err := countMigrationFiles(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("scanning migrations directory: %w", err)
-	}
-
-	// Filter to migration files only (exclude main.go)
-	var migFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migFiles = append(migFiles, f)
-		}
 	}
 
 	if len(migFiles) > 0 {
@@ -238,7 +238,7 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
-	outPath := filepath.Join(migrationsDir, codegen.MigrationFileName(name))
+	outPath := filepath.Join(migrationsDir, name+gen.FileExtension())
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing migration file: %w", err)
 	}
@@ -505,6 +505,35 @@ func BuildMigrationName(currentCount int, customName, autoName string) string {
 	return fmt.Sprintf("%s_%s", num, time.Now().Format("20060102150405"))
 }
 
+// newGenerator returns the appropriate MigrationGenerator based on the config format.
+func newGenerator(cfg *config.Config) codegen.MigrationGenerator {
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
+	switch format {
+	case codegen.FormatStarlark:
+		return codegen.NewStarlarkGenerator()
+	default:
+		return codegen.NewGoGenerator()
+	}
+}
+
+// countMigrationFiles returns all migration files (.go and .star) in the directory,
+// excluding main.go and test files.
+func countMigrationFiles(migrationsDir string) ([]string, error) {
+	goFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	starFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.star"))
+
+	var migFiles []string
+	for _, f := range goFiles {
+		base := filepath.Base(f)
+		if base != "main.go" && !strings.HasSuffix(base, "_test.go") {
+			migFiles = append(migFiles, f)
+		}
+	}
+	migFiles = append(migFiles, starFiles...)
+	sort.Strings(migFiles)
+	return migFiles, nil
+}
+
 // goGenerateMerge generates a merge migration for detected branches. It uses
 // codegen.MergeGenerator to produce a .go file that depends on all branch
 // leaves but contains no operations, thus unifying the DAG.
@@ -543,7 +572,9 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
-	outPath := filepath.Join(migrationsDir, codegen.MigrationFileName(name))
+	cfg := config.LoadOrDefault(configFile)
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
+	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing merge migration: %w", err)
 	}

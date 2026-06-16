@@ -44,10 +44,17 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "morphic",
 	Short: "Django-style Go migration generator",
-	Long: `Generate database migrations from YAML schema files as typed Go code.
+	Long: `Generate database migrations from YAML schema files as typed Go or Starlark code.
 
-Define your schema in YAML, generate type-safe Go migration files, and run
-them in-process via yaegi — no Go toolchain required at runtime.`,
+Define your schema in YAML, generate type-safe migration files, and run them
+in-process — no Go toolchain required at runtime.
+
+Two output formats are supported:
+  go       — Go files evaluated via yaegi (default)
+  starlark — .star files evaluated via google/starlark-go
+
+Set the format in your config file (migration.format: starlark) or per-run
+with --format starlark on the generate command.`,
 }
 
 // GetRootCmd returns the root command for embedding in other applications

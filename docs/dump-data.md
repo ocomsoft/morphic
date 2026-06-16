@@ -3,10 +3,14 @@
 ## Purpose
 
 The `dump-data` command connects to a live database, reads all rows from the
-specified tables, and generates a `.go` migration file containing `UpsertData`
+specified tables, and generates a migration file containing `UpsertData`
 operations for each table. This is useful for seeding reference or lookup data
 (e.g. country codes, unit types, roles) so that the data can be version-controlled
 and applied consistently across environments via the normal migration workflow.
+
+The output format (Go or Starlark) is determined by the `migration.format` setting
+in your `makemigrations.config.yaml`. When Starlark format is active, `dump-data`
+emits a `.star` file using `upsert_data()` instead of a `.go` file with `UpsertData`.
 
 ## Usage
 
@@ -21,6 +25,7 @@ morphic generate dump-data [table1 table2 ...] [flags]
 | `--name`         | string   | `""`        | Custom migration name suffix                                                                     |
 | `--dry-run`      | bool     | `false`     | Print generated source without writing                                                           |
 | `--verbose`      | bool     | `false`     | Show connection and row-count details                                                            |
+| `--jsonl`        | bool     | `false`     | Write row data to JSONL files instead of embedding inline                                        |
 | `--conflict-key` | []string | (auto)      | PK columns for ON CONFLICT; applied to all tables; required if table not in migration schema     |
 | `--where`        | []string | (none)      | WHERE filter; use `table:condition` for per-table or just `condition` for all                     |
 | `--dsn`          | string   | `""`        | Full database DSN (overrides host/port/etc.)                                                     |
@@ -68,6 +73,56 @@ func init() {
 Each `UpsertData` operation translates to an `INSERT ... ON CONFLICT (pk) DO UPDATE`
 statement at migration runtime.
 
+## --jsonl: Storing Row Data in Separate Files
+
+Write row data to JSONL files in `migrations/data/` instead of embedding it inline
+in the migration source. This keeps migration files small and makes large reference
+datasets (country codes, postal codes, product catalogs) reviewable and diff-able
+as standalone files.
+
+```bash
+# Write data to JSONL files
+morphic generate dump-data countries --jsonl
+
+# Preview the migration (data files are still written)
+morphic generate dump-data countries --jsonl --dry-run
+```
+
+When `--jsonl` is used:
+- Data files are written to `migrations/data/<migration_name>_<table>.jsonl`
+- The `data/` subdirectory is created automatically if it does not exist
+- The generated Go migration references the JSONL file via the `DataFile` field on `UpsertData`
+- The generated Starlark migration references the file via the `file=` kwarg on `upsert_data()`
+
+Example Go output with `--jsonl`:
+
+```go
+&m.UpsertData{
+    Table:       "countries",
+    ConflictKey: []string{"code"},
+    DataFile:    "data/0004_dump_countries_countries.jsonl",
+},
+```
+
+Example Starlark output with `--jsonl`:
+
+```starlark
+upsert_data("countries",
+    conflict_keys = ["code"],
+    file = "data/0004_dump_countries_countries.jsonl",
+)
+```
+
+The JSONL file format contains one JSON object per line:
+
+```
+{"code":"AU","name":"Australia","population":25687041}
+{"code":"US","name":"United States","population":331002651}
+```
+
+Empty lines and lines beginning with `//` are treated as comments and skipped at
+migration runtime. All objects in the file must share the same set of keys.
+
 ## Examples
 
 ```bash
@@ -85,6 +140,12 @@ morphic generate dump-data legacy_table --conflict-key id
 
 # Specify database connection explicitly
 morphic generate dump-data countries --dsn "host=prod-db port=5432 dbname=myapp user=ro sslmode=require"
+
+# Write row data to separate JSONL files (recommended for large datasets)
+morphic generate dump-data countries --jsonl
+
+# Preview JSONL-backed output without committing to disk
+morphic generate dump-data countries --jsonl --dry-run
 ```
 
 ## Filtering Rows with --where

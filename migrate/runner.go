@@ -43,25 +43,29 @@ type RunOptions struct {
 
 // Runner executes migrations against a database in topological order.
 type Runner struct {
-	graph    *Graph
-	provider providers.Provider
-	db       *sql.DB
-	recorder *MigrationRecorder
-	output   io.Writer
+	graph         *Graph
+	provider      providers.Provider
+	db            *sql.DB
+	recorder      *MigrationRecorder
+	output        io.Writer
+	migrationsDir string
 }
 
 // NewRunner creates a Runner using the given graph, provider, db, recorder,
-// and output writer. If output is nil, os.Stdout is used.
-func NewRunner(graph *Graph, provider providers.Provider, db *sql.DB, recorder *MigrationRecorder, output io.Writer) *Runner {
+// output writer, and migrations directory. If output is nil, os.Stdout is used.
+// The migrationsDir is passed to operations that implement DataFileResolver
+// so they can locate data files relative to the migrations directory.
+func NewRunner(graph *Graph, provider providers.Provider, db *sql.DB, recorder *MigrationRecorder, output io.Writer, migrationsDir string) *Runner {
 	if output == nil {
 		output = os.Stdout
 	}
 	return &Runner{
-		graph:    graph,
-		provider: provider,
-		db:       db,
-		recorder: recorder,
-		output:   output,
+		graph:         graph,
+		provider:      provider,
+		db:            db,
+		recorder:      recorder,
+		output:        output,
+		migrationsDir: migrationsDir,
 	}
 }
 
@@ -212,6 +216,9 @@ func (r *Runner) ShowSQL() error {
 		r.printf("-- %s\n", mig.Name)
 		for i, op := range mig.Operations {
 			r.provider.SetTypeMappings(state.TypeMappings)
+			if resolver, ok := op.(DataFileResolver); ok {
+				resolver.SetBasePath(r.migrationsDir)
+			}
 			sqlStr, err := op.Up(r.provider, state, state.Defaults)
 			if err != nil {
 				return fmt.Errorf("%s operation %d/%d [%s]: %w", mig.Name, i+1, len(mig.Operations), op.Describe(), err)
@@ -244,6 +251,9 @@ func (r *Runner) applyMigration(mig *Migration, state *SchemaState, opts RunOpti
 
 	for i, op := range mig.Operations {
 		r.provider.SetTypeMappings(state.TypeMappings)
+		if resolver, ok := op.(DataFileResolver); ok {
+			resolver.SetBasePath(r.migrationsDir)
+		}
 		sqlStr, err := op.Up(r.provider, state, state.Defaults)
 		if err != nil {
 			return fmt.Errorf("operation %d/%d [%s]: generating SQL: %w", i+1, len(mig.Operations), op.Describe(), err)
@@ -306,6 +316,9 @@ func (r *Runner) rollbackMigration(mig *Migration, state *SchemaState, opts RunO
 		op := mig.Operations[i]
 		opNum := total - i
 		r.provider.SetTypeMappings(state.TypeMappings)
+		if resolver, ok := op.(DataFileResolver); ok {
+			resolver.SetBasePath(r.migrationsDir)
+		}
 		sqlStr, err := op.Down(r.provider, state, state.Defaults)
 		if err != nil {
 			return fmt.Errorf("operation %d/%d [%s]: generating down SQL: %w", opNum, total, op.Describe(), err)

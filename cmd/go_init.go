@@ -42,7 +42,8 @@ import (
 func ExecuteGoMigrationInit(databaseType string, verbose bool) error {
 	cfg := config.DefaultConfig()
 	migrationsDir := cfg.Migration.Directory
-	gen := codegen.NewGoGenerator()
+	gen := newGenerator(cfg)
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
 	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
@@ -68,33 +69,36 @@ func ExecuteGoMigrationInit(databaseType string, verbose bool) error {
 		if err != nil {
 			return fmt.Errorf("generating initial migration: %w", err)
 		}
-		migPath := filepath.Join(migrationsDir, codegen.MigrationFileName(initialMigName))
+		migPath := filepath.Join(migrationsDir, initialMigName+gen.FileExtension())
 		if err := os.WriteFile(migPath, []byte(src), 0644); err != nil {
 			return fmt.Errorf("writing initial migration: %w", err)
 		}
 		fmt.Printf("Created %s (from existing schema snapshot)\n", migPath)
 	}
 
-	// Generate main.go only if it doesn't exist
-	mainPath := filepath.Join(migrationsDir, "main.go")
-	if _, statErr := os.Stat(mainPath); os.IsNotExist(statErr) {
-		if err := os.WriteFile(mainPath, []byte(gen.GenerateMainGo()), 0644); err != nil {
-			return fmt.Errorf("writing main.go: %w", err)
-		}
-		fmt.Printf("Created %s\n", mainPath)
-	}
+	// Generate main.go and go.mod only for Go format (Starlark doesn't need them).
+	if format == codegen.FormatGo {
+		goGen, ok := gen.(*codegen.GoGenerator)
+		if ok {
+			mainPath := filepath.Join(migrationsDir, "main.go")
+			if _, statErr := os.Stat(mainPath); os.IsNotExist(statErr) {
+				if err := os.WriteFile(mainPath, []byte(goGen.GenerateMainGo()), 0644); err != nil {
+					return fmt.Errorf("writing main.go: %w", err)
+				}
+				fmt.Printf("Created %s\n", mainPath)
+			}
 
-	// Determine module name and Go version from go.mod in current directory.
-	moduleName := readModuleName() + "/migrations"
-	parentGoVersion := findParentGoVersion(".")
+			moduleName := readModuleName() + "/migrations"
+			parentGoVersion := findParentGoVersion(".")
 
-	// Generate go.mod only if it doesn't exist
-	goModPath := filepath.Join(migrationsDir, "go.mod")
-	if _, statErr := os.Stat(goModPath); os.IsNotExist(statErr) {
-		if err := os.WriteFile(goModPath, []byte(gen.GenerateGoMod(moduleName, "main", parentGoVersion)), 0644); err != nil {
-			return fmt.Errorf("writing go.mod: %w", err)
+			goModPath := filepath.Join(migrationsDir, "go.mod")
+			if _, statErr := os.Stat(goModPath); os.IsNotExist(statErr) {
+				if err := os.WriteFile(goModPath, []byte(goGen.GenerateGoMod(moduleName, "main", parentGoVersion)), 0644); err != nil {
+					return fmt.Errorf("writing go.mod: %w", err)
+				}
+				fmt.Printf("Created %s\n", goModPath)
+			}
 		}
-		fmt.Printf("Created %s\n", goModPath)
 	}
 
 	// Print next steps

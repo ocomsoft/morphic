@@ -36,7 +36,8 @@ type Config struct {
 	DBUser       string
 	DBPassword   string
 	DBName       string
-	DBSSLMode    string
+	DBSSLMode     string
+	MigrationsDir string // directory containing migration files
 }
 
 // EnvOr returns the value of the named environment variable,

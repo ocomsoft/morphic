@@ -27,7 +27,10 @@ SOFTWARE.
 package migrate
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ocomsoft/morphic/internal/providers"
@@ -61,6 +64,12 @@ type Operation interface {
 // returns true, the runner logs a warning and continues instead of aborting.
 type ErrorIgnorer interface {
 	ShouldIgnoreErrors() bool
+}
+
+// DataFileResolver is an optional interface for operations that load data
+// from external files. The runner calls SetBasePath before Up()/Down().
+type DataFileResolver interface {
+	SetBasePath(dir string)
 }
 
 // boolPtr converts a bool value to a *bool pointer for use with types.Field.Nullable.
@@ -921,6 +930,12 @@ type UpsertData struct {
 	// formatted as SQL literals via FormatLiteral, supporting nil, string, bool,
 	// integer, float, and time.Time types.
 	Rows []map[string]any
+	// DataFile is the path to a JSONL file containing row data, relative to
+	// the migrations directory. Mutually exclusive with Rows.
+	DataFile string
+	// basePath is the migrations directory, set by the runner via SetBasePath
+	// before Up()/Down() execution.
+	basePath string
 }
 
 // TypeName returns the operation type identifier.
@@ -934,7 +949,30 @@ func (op *UpsertData) IsDestructive() bool { return false }
 
 // Describe returns a human-readable description of this operation.
 func (op *UpsertData) Describe() string {
+	if op.DataFile != "" && op.Rows == nil {
+		return fmt.Sprintf("Upsert rows from %s into %s", op.DataFile, op.Table)
+	}
 	return fmt.Sprintf("Upsert %d row(s) into %s", len(op.Rows), op.Table)
+}
+
+// SetBasePath sets the migrations directory used to resolve DataFile paths.
+func (op *UpsertData) SetBasePath(dir string) { op.basePath = dir }
+
+// resolveRows loads rows from the DataFile if set and Rows is nil.
+func (op *UpsertData) resolveRows() error {
+	if op.DataFile == "" || op.Rows != nil {
+		return nil
+	}
+	path := filepath.Join(op.basePath, op.DataFile)
+	rows, err := ReadJSONL(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("data file %q not found (resolved to %s)", op.DataFile, path)
+		}
+		return err
+	}
+	op.Rows = rows
+	return nil
 }
 
 // Up generates the upsert SQL by delegating to the provider's GenerateUpsert.
@@ -944,6 +982,9 @@ func (op *UpsertData) Describe() string {
 // is present, the resolved SQL expression is emitted verbatim (not quoted); if
 // not, the DefaultRef string itself is used as a raw SQL expression.
 func (op *UpsertData) Up(p providers.Provider, _ *SchemaState, defaults map[string]string) (string, error) {
+	if err := op.resolveRows(); err != nil {
+		return "", err
+	}
 	if len(op.Rows) == 0 {
 		return "", nil
 	}
@@ -983,6 +1024,9 @@ func formatUpsertValue(v any, defaults map[string]string) string {
 // Down generates DELETE statements that remove each upserted row by matching
 // on the ConflictKeys. Returns empty string when Rows or ConflictKeys is empty.
 func (op *UpsertData) Down(p providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+	if err := op.resolveRows(); err != nil {
+		return "", err
+	}
 	if len(op.Rows) == 0 || len(op.ConflictKeys) == 0 {
 		return "", nil
 	}

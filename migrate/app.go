@@ -239,7 +239,7 @@ func (a *App) buildRunner() (*Runner, *sql.DB, error) {
 		_ = db.Close()
 		return nil, nil, err
 	}
-	return NewRunner(g, p, db, recorder, os.Stdout), db, nil
+	return NewRunner(g, p, db, recorder, os.Stdout, a.config.MigrationsDir), db, nil
 }
 
 func (a *App) runUp(to string, opts RunOptions) error {

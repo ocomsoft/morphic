@@ -73,8 +73,9 @@ func ExecuteMigrate(migrationsDir string, defaultURL string, args []string) erro
 		return fmt.Errorf("loading migrations: %w", err)
 	}
 	app := migrate.NewAppWithRegistry(migrate.Config{
-		DatabaseType: migrate.EnvOr("DB_TYPE", "postgresql"),
-		DatabaseURL:  migrate.EnvOr("DATABASE_URL", defaultURL),
+		DatabaseType:  migrate.EnvOr("DB_TYPE", "postgresql"),
+		DatabaseURL:   migrate.EnvOr("DATABASE_URL", defaultURL),
+		MigrationsDir: migrationsDir,
 	}, reg)
 	return app.Run(args)
 }

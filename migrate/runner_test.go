@@ -61,7 +61,7 @@ func buildTestRunner(t *testing.T, reg *migrate.Registry) (*migrate.Runner, *mig
 		t.Fatalf("BuildGraph: %v", err)
 	}
 	p := sqlite.New()
-	runner := migrate.NewRunner(g, p, db, recorder, io.Discard)
+	runner := migrate.NewRunner(g, p, db, recorder, io.Discard, "")
 	return runner, recorder, db
 }
 
@@ -725,7 +725,7 @@ func TestRunner_Up_WarnOnMissingDrop_SkipsIfNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildGraph: %v", err)
 	}
-	runner := migrate.NewRunner(g, p, db, rec, io.Discard)
+	runner := migrate.NewRunner(g, p, db, rec, io.Discard, "")
 
 	// Without flag — should fail because table doesn't exist
 	err = runner.Up("", migrate.RunOptions{})
@@ -888,7 +888,7 @@ func TestNewRunner_NilSafe(t *testing.T) {
 		t.Fatalf("BuildGraph: %v", err)
 	}
 	p := sqlite.New()
-	runner := migrate.NewRunner(g, p, db, recorder, nil)
+	runner := migrate.NewRunner(g, p, db, recorder, nil, "")
 	if runner == nil {
 		t.Fatal("expected non-nil Runner")
 	}

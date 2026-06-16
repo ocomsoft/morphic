@@ -22,9 +22,11 @@ func init() {
 		"NewRegistry":           reflect.ValueOf(migrate.NewRegistry),
 		"NewRunner":             reflect.ValueOf(migrate.NewRunner),
 		"NewSchemaState":        reflect.ValueOf(migrate.NewSchemaState),
+		"ReadJSONL":             reflect.ValueOf(migrate.ReadJSONL),
 		"Register":              reflect.ValueOf(migrate.Register),
 		"RenderDAGASCII":        reflect.ValueOf(migrate.RenderDAGASCII),
 		"SortedKeys":            reflect.ValueOf(migrate.SortedKeys),
+		"WriteJSONL":            reflect.ValueOf(migrate.WriteJSONL),
 
 		// type definitions
 		"AddField":             reflect.ValueOf((*migrate.AddField)(nil)),
@@ -64,8 +66,19 @@ func init() {
 		"UpsertData":           reflect.ValueOf((*migrate.UpsertData)(nil)),
 
 		// interface wrapper definitions
-		"_Operation": reflect.ValueOf((*_github_com_ocomsoft_morphic_migrate_Operation)(nil)),
+		"_DataFileResolver": reflect.ValueOf((*_github_com_ocomsoft_morphic_migrate_DataFileResolver)(nil)),
+		"_Operation":        reflect.ValueOf((*_github_com_ocomsoft_morphic_migrate_Operation)(nil)),
 	}
+}
+
+// _github_com_ocomsoft_morphic_migrate_DataFileResolver is an interface wrapper for DataFileResolver type
+type _github_com_ocomsoft_morphic_migrate_DataFileResolver struct {
+	IValue       interface{}
+	WSetBasePath func(dir string)
+}
+
+func (W _github_com_ocomsoft_morphic_migrate_DataFileResolver) SetBasePath(dir string) {
+	W.WSetBasePath(dir)
 }
 
 // _github_com_ocomsoft_morphic_migrate_Operation is an interface wrapper for Operation type

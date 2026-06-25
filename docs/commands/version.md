@@ -61,4 +61,4 @@ morphic version --format json
 ## See Also
 
 - [init command](./init.md) — Initialise the migrations directory
-- [morphic command](./morphic.md) — Generate migrations from YAML schema changes
+- [morphic command](./morphic.md) — Generate migrations from schema changes

@@ -198,6 +198,6 @@ morphic generate dump-data countries --verbose
 ## See Also
 
 - [empty command](./empty.md) — Create a blank migration for custom operations
-- [morphic command](./morphic.md) — Generate migrations from YAML schema changes
+- [morphic command](./morphic.md) — Generate migrations from schema changes
 - [migrate command](./migrate.md) — Run `up`, `down`, `status`, `fake` etc.
 - [Migrations Guide](../migrations.md) — Full guide to the Go migration framework

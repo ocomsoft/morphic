@@ -171,7 +171,7 @@ morphic migrate up
 
 ## See Also
 
-- [morphic command](./morphic.md) — Generate migrations from YAML schema changes
+- [morphic command](./morphic.md) — Generate migrations from schema changes
 - [migrate command](./migrate.md) — Run `up`, `down`, `status`, `fake` etc.
-- [Migrations Guide](../migrations.md) — Full guide to the Go migration framework
+- [Migrations Guide](../migrations.md) — Full guide to the migration framework
 - [init command](./init.md) — Initialise the migrations directory

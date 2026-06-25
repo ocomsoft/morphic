@@ -1,10 +1,12 @@
 # YAML Schema Format Guide
 
-This comprehensive guide covers the YAML schema format used by morphic for defining database schemas.
+> **Note:** The primary schema format for morphic is now **Starlark** (`schema.star`). YAML (`schema.yaml`) is still supported as a legacy format. For new projects, use `schema.star` — see the [Starlark Migration Format](starlark-migrations.md) and README for examples. Use `morphic yaml2dsl` to convert an existing YAML schema to Starlark.
+
+This guide covers the YAML schema format used by morphic for defining database schemas.
 
 ## Overview
 
-The YAML schema format is the **primary interface** for morphic. It provides a database-agnostic way to define tables, fields, relationships, and constraints that get automatically converted to database-specific SQL.
+The YAML schema format provides a database-agnostic way to define tables, fields, relationships, and constraints that get automatically converted to database-specific SQL.
 
 ## Basic Structure
 

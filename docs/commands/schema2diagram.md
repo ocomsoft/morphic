@@ -1,10 +1,10 @@
 # schema-to-diagram Command
 
-The `schema-to-diagram` command generates comprehensive Markdown documentation with interactive Entity Relationship Diagrams (ERD) from YAML schema files. This documentation tool creates professional technical documentation suitable for project documentation, code reviews, and developer onboarding.
+The `schema-to-diagram` command generates comprehensive Markdown documentation with interactive Entity Relationship Diagrams (ERD) from schema files. This documentation tool creates professional technical documentation suitable for project documentation, code reviews, and developer onboarding.
 
 ## Overview
 
-The `schema-to-diagram` command scans all YAML schema files in Go module dependencies, merges them into a unified schema, and generates detailed Markdown documentation featuring:
+The `schema-to-diagram` command scans all schema files in Go module dependencies, merges them into a unified schema, and generates detailed Markdown documentation featuring:
 
 - Interactive Mermaid Entity Relationship Diagrams
 - Complete table and field documentation with constraints
@@ -111,8 +111,8 @@ Detailed relationship documentation:
 morphic schema-to-diagram
 
 # Output
-Scanning module dependencies for YAML schemas...
-Found 3 YAML schema files
+Scanning module dependencies for schemas...
+Found 3 schema files
 Processing and merging schemas...
 Merged schema: 8 tables
 Generating Markdown documentation...
@@ -154,14 +154,14 @@ Generating schema documentation with diagrams
 ===========================================
 Output file: schema-docs.md
 
-1. Scanning Go modules for YAML schema files...
+1. Scanning Go modules for schema files...
 Scanning module dependencies...
-Found 3 YAML schema files
-  - schema/schema.yaml (5 tables)
-  - modules/auth/schema.yaml (2 tables)  
-  - modules/products/schema.yaml (3 tables)
+Found 3 schema files
+  - schema/schema.star (5 tables)
+  - modules/auth/schema.star (2 tables)  
+  - modules/products/schema.star (3 tables)
 
-2. Parsing and merging YAML schemas...
+2. Parsing and merging schemas...
 Processing schema: main application
 Processing schema: authentication module
 Processing schema: product catalog
@@ -265,9 +265,9 @@ Works with:
 
 ### Field Type Mapping
 
-YAML schema types are intelligently mapped to Mermaid-compatible types:
+Schema types are intelligently mapped to Mermaid-compatible types:
 
-| YAML Type | Mermaid Type | Description |
+| Schema Type | Mermaid Type | Description |
 |-----------|--------------|-------------|
 | `varchar`, `text` | `string` | Text fields |
 | `integer`, `bigint`, `serial` | `int` | Numeric fields |
@@ -358,12 +358,12 @@ diff docs/staging-schema.md docs/production-schema.md
 The command processes schema includes automatically:
 
 ```yaml
-# Main schema.yaml
+# Main schema.star
 include:
   - module: github.com/company/auth-module
-    path: schemas/auth.yaml
+    path: schemas/auth.star
   - module: github.com/company/product-module  
-    path: schemas/products.yaml
+    path: schemas/products.star
 
 tables:
   - name: main_table
@@ -455,14 +455,14 @@ MORPHIC_OUTPUT_COLOR_ENABLED=false morphic schema-to-diagram
    time morphic schema-to-diagram --verbose
    
    # Consider splitting large schemas into modules
-   find . -name "schema.yaml" -exec wc -l {} +
+   find . -name "schema.star" -exec wc -l {} +
    ```
 
 4. **Missing relationships in diagram**
    ```bash
-   # Verify foreign key definitions in YAML
-   grep -n "foreign_key:" schema/schema.yaml
-   grep -A3 -B1 "type: foreign_key" schema/schema.yaml
+   # Verify foreign key definitions in schema
+   grep -n "foreign_key:" schema/schema.star
+   grep -A3 -B1 "type: foreign_key" schema/schema.star
    ```
 
 5. **Output formatting issues**
@@ -507,7 +507,7 @@ wc -l schema-documentation.md
 name: Update Documentation
 on:
   push:
-    paths: ['schema/**', '**/schema.yaml']
+    paths: ['schema/**', '**/schema.star']
 
 jobs:
   update-docs:
@@ -550,7 +550,7 @@ docs-watch:
 # .git/hooks/pre-commit
 
 echo "Checking for schema changes..."
-if git diff --cached --name-only | grep -q "schema.*\.yaml"; then
+if git diff --cached --name-only | grep -q "schema.*\.star"; then
     echo "Schema files changed, updating documentation..."
     morphic schema-to-diagram --output=docs/DATABASE.md
     git add docs/DATABASE.md
@@ -563,5 +563,5 @@ fi
 - [schema-to-sql Command](./schema_to_sql.md) - Generate SQL from schemas
 - [db-to-schema Command](./db-to-schema.md) - Extract schemas from databases  
 - [morphic Command](./morphic.md) - Generate migrations from schemas
-- [Schema Format Guide](../schema-format.md) - YAML schema syntax reference
+- [Schema Format Guide](../schema-format.md) - schema syntax reference
 - [Configuration Guide](../configuration.md) - Configuration options

@@ -664,7 +664,7 @@ Existing Go (`.go`) migration files can be converted to Starlark format using th
 morphic convert migrations/ -o migrations_starlark/
 ```
 
-This loads each Go migration via the Yaegi interpreter, extracts the operations, and emits equivalent `.star` files. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
+This loads each Go migration file, extracts the operations, and emits equivalent `.star` files. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
 
 ---
 

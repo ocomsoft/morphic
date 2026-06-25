@@ -1,10 +1,10 @@
 # struct-to-schema Command
 
-Convert Go struct definitions to morphic-compatible YAML schema files automatically.
+Convert Go struct definitions to morphic-compatible Starlark schema files automatically.
 
 ## Overview
 
-The `struct-to-schema` command analyzes Go source code to extract struct definitions and generates comprehensive YAML schema files that can be used with morphic. This powerful feature enables automatic database schema generation from existing Go codebases.
+The `struct-to-schema` command analyzes Go source code to extract struct definitions and generates comprehensive Starlark schema files that can be used with morphic. This powerful feature enables automatic database schema generation from existing Go codebases.
 
 ## Usage
 
@@ -15,7 +15,7 @@ morphic struct-to-schema [flags]
 ### Flags
 
 - `--input string`: Input directory to scan for Go files (default: ".")
-- `--output string`: Output YAML schema file path (default: "schema/schema.yaml")  
+- `--output string`: Output Starlark schema file path (default: "schema/schema.star")  
 - `--config string`: Configuration file path for custom type mappings
 - `--database string`: Target database type (postgresql, mysql, sqlite, sqlserver) (default: "postgresql")
 - `--dry-run`: Preview changes without writing files
@@ -34,7 +34,7 @@ morphic struct-to-schema
 
 Scan a models directory and output to a custom location:
 ```bash
-morphic struct-to-schema --input ./models --output schema/generated.yaml
+morphic struct-to-schema --input ./models --output schema/generated.star
 ```
 
 ### Preview Changes
@@ -142,7 +142,7 @@ type Post struct {
 }
 ```
 
-### YAML Schema Output
+### Schema Output
 
 ```yaml
 database:
@@ -235,7 +235,7 @@ Automatically excludes common directories:
 
 ## Integration with Morphic
 
-Generated schemas are fully compatible with the morphic workflow:
+Generated schema files are fully compatible with the morphic workflow:
 
 ```bash
 # Generate schema from Go structs

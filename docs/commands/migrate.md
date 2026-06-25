@@ -1,6 +1,6 @@
 # migrate — In-Process Migration Runner
 
-`morphic migrate` is the runtime component of the Go migration framework. It loads the migration `.go` files in your project's `migrations/` directory using the [yaegi](https://github.com/traefik/yaegi) Go interpreter and runs the embedded migration App in-process — no `go build`, no temporary binary, no Go toolchain required at runtime.
+`morphic migrate` is the runtime component of the migration framework. It loads the migration `.star` files in your project's `migrations/` directory using the Starlark interpreter and runs the embedded migration App in-process — no compile step, no temporary binary required at runtime.
 
 > **This is the primary workflow.** Run `morphic init` to generate the `migrations/` directory, then use `morphic migrate` to apply, roll back, and inspect migrations.
 
@@ -357,7 +357,7 @@ morphic migrate status
 ### Day-to-day development cycle
 
 ```bash
-# 1. Edit your YAML schema files
+# 1. Edit your schema files
 
 # 2. Generate the migration
 morphic generate --name "add user preferences"

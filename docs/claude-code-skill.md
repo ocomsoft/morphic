@@ -8,7 +8,7 @@ When installed, the skill **auto-triggers** whenever Claude detects database-rel
 
 - Adding or modifying tables, fields, indexes, or foreign keys
 - Creating migrations
-- Working in a project with `schema/schema.yaml` or `migrations/morphic.config.yaml`
+- Working in a project with `schema/schema.star` or `migrations/morphic.config.yaml`
 
 Claude will follow the enforced workflow rather than writing raw SQL or hand-crafting migration files.
 
@@ -40,7 +40,7 @@ The skill guides Claude through these steps for every database change:
 1. Check if morphic is initialized
    └─ If not, run: morphic init --database <type>
 
-2. Edit schema/schema.yaml
+2. Edit schema/schema.star
    └─ Add/modify/remove tables, fields, indexes, defaults, type mappings
 
 3. Generate migration code
@@ -56,7 +56,7 @@ The skill guides Claude through these steps for every database change:
 
 ## Rules the Skill Enforces
 
-1. **Schema-first**: All structural database changes go through `schema/schema.yaml`. Claude will not write raw SQL for structure changes.
+1. **Schema-first**: All structural database changes go through `schema/schema.star`. Claude will not write raw SQL for structure changes.
 
 2. **Prefer generated code unchanged**: Claude will try to leave generated migration `.go` files as-is. If a modification is genuinely needed (e.g., data migration logic), it will be minimal and careful.
 
@@ -86,7 +86,7 @@ You: Add a profiles table with avatar_url and bio fields
 
 Claude (auto-triggers go-morphic skill):
 1. Checks for migrations/morphic.config.yaml ✓
-2. Edits schema/schema.yaml to add the profiles table
+2. Edits schema/schema.star to add the profiles table
 3. Runs: morphic generate --name "add_profiles"
 4. Reviews the generated 000N_add_profiles.go
 5. Runs: morphic migrate showsql to preview SQL
@@ -104,6 +104,6 @@ If you installed via symlink, it updates automatically when you pull the repo.
 
 ## Further Reading
 
-- [Schema Format Guide](schema-format.md) — complete YAML schema reference
+- [Schema Format Guide](schema-format.md) — complete Starlark schema reference
 - [Configuration Guide](configuration.md) — config file and environment variables
 - [Command Reference](commands/) — all available commands

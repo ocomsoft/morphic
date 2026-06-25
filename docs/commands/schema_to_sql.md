@@ -1,15 +1,15 @@
 # schema-to-sql Command
 
-The `schema-to-sql` command analyzes and displays the current YAML schema definitions without generating migration files. This is primarily used for debugging, validation, and understanding what SQL would be generated from your schema.
+The `schema-to-sql` command analyzes and displays the current Starlark schema definitions without generating migration files. This is primarily used for debugging, validation, and understanding what SQL would be generated from your schema.
 
 ## Overview
 
-The `schema-to-sql` command processes YAML schema files and outputs the database-specific SQL that would be generated, along with detailed information about the schema processing steps. It's useful for:
+The `schema-to-sql` command processes schema files and outputs the database-specific SQL that would be generated, along with detailed information about the schema processing steps. It's useful for:
 
-- Validating YAML schema syntax and structure
+- Validating schema syntax and structure
 - Previewing database-specific SQL generation
 - Debugging schema processing issues
-- Understanding how YAML translates to SQL
+- Understanding how Starlark schema translates to SQL
 - Checking schema file discovery
 
 ## Usage
@@ -34,21 +34,21 @@ morphic schema-to-sql [flags]
 ## What It Shows
 
 ### 1. Schema File Discovery
-Lists all YAML schema files found during the scanning process:
+Lists all schema files found during the scanning process:
 
 ```
 ▶ Scanning for schema files...
-✓ Found schema file: schema/schema.yaml
-✓ Found schema file: modules/products/schema.yaml
-✓ Found schema file: modules/orders/schema.yaml
+✓ Found schema file: schema/schema.star
+✓ Found schema file: modules/products/schema.star
+✓ Found schema file: modules/orders/schema.star
 ```
 
 ### 2. Schema Processing (with --verbose)
 Shows detailed processing steps:
 
 ```
-▶ Processing YAML schema...
-  - Parsing schema/schema.yaml
+▶ Processing schema...
+  - Parsing schema/schema.star
   - Validating schema structure
   - Applying database defaults
   - Merging multiple schema files
@@ -93,8 +93,8 @@ morphic schema-to-sql
 
 # Output
 ▶ Scanning for schema files...
-✓ Found schema file: schema/schema.yaml
-▶ Processing YAML schema...
+✓ Found schema file: schema/schema.star
+▶ Processing schema...
 ✓ Schema validation completed
 
 -- Database: myapp (v1.0.0)
@@ -116,13 +116,13 @@ morphic schema-to-sql --verbose
 # Output
 ▶ Scanning for schema files...
   - Searching in: .
-  - Pattern: **/schema.yaml
-✓ Found schema file: schema/schema.yaml
+  - Pattern: **/schema.star
+✓ Found schema file: schema/schema.star
   - File size: 1.2KB
   - Last modified: 2024-01-22 13:45:00
 
-▶ Processing YAML schema...
-  - Parsing YAML content
+▶ Processing schema...
+  - Parsing Starlark schema content
   - Validating required fields
   - Applying postgresql defaults
   - Processing table: users (3 fields)
@@ -288,23 +288,23 @@ The command will show detailed error messages for invalid schemas:
 ```bash
 $ morphic schema-to-sql
 ▶ Scanning for schema files...
-✓ Found schema file: schema/schema.yaml
-▶ Processing YAML schema...
+✓ Found schema file: schema/schema.star
+▶ Processing schema...
 ✗ Schema validation failed:
   - Table 'users' field 'email': varchar type missing required 'length' property
   - Table 'products' field 'invalid_field': unknown field type 'badtype'
   - Foreign key reference 'nonexistent_table' not found
 ```
 
-### YAML Syntax Errors
+### Starlark Syntax Errors
 
 ```bash
 $ morphic schema-to-sql
 ▶ Scanning for schema files...
-✓ Found schema file: schema/schema.yaml
-▶ Processing YAML schema...
-✗ YAML parsing failed: schema/schema.yaml:15
-  yaml: line 15: found character that cannot start any token
+✓ Found schema file: schema/schema.star
+▶ Processing schema...
+✗ Schema parsing failed: schema/schema.star:15
+  line 15: found character that cannot start any token
   
   Hint: Check indentation and syntax around line 15
 ```
@@ -315,11 +315,11 @@ $ morphic schema-to-sql
 $ morphic schema-to-sql
 ▶ Scanning for schema files...
 ✗ No schema files found in search paths:
-  - ./schema/schema.yaml
-  - ./*/schema.yaml
-  - ./*/*/schema.yaml
+  - ./schema/schema.star
+  - ./*/schema.star
+  - ./*/*/schema.star
   
-  Suggestion: Create schema/schema.yaml or check configuration
+  Suggestion: Create schema/schema.star or check configuration
 ```
 
 ## Use Cases
@@ -328,7 +328,7 @@ $ morphic schema-to-sql
 
 ```bash
 # Iterative schema development
-vim schema/schema.yaml
+vim schema/schema.star
 morphic schema-to-sql --verbose    # Check for issues
 # Fix issues, repeat
 ```
@@ -413,7 +413,7 @@ output:
 morphic schema-to-sql --verbose
 
 # Output shows file sources
-▶ Processing YAML schema...
+▶ Processing schema...
   - Processing: core/users.yaml (2 tables)
   - Processing: ecommerce/products.yaml (3 tables)  
   - Processing: reporting/analytics.yaml (5 tables)
@@ -424,7 +424,7 @@ morphic schema-to-sql --verbose
 
 ```bash
 # Test custom defaults
-cat > test-schema.yaml << EOF
+cat > test-schema.star << EOF
 database:
   name: test
   version: 1.0.0
@@ -472,13 +472,13 @@ diff before.sql after.sql
    cat migrations/morphic.config.yaml
    ```
 
-2. **YAML syntax errors**
+2. **Schema syntax errors**
    ```bash
-   # Validate YAML manually
-   python -c "import yaml; yaml.safe_load(open('schema/schema.yaml'))"
+   # Validate schema manually
+   morphic schema-to-sql --verbose 2>&1 | grep -i "parsing failed"
    
    # Check indentation
-   cat -A schema/schema.yaml
+   cat -A schema/schema.star
    ```
 
 3. **Type validation errors**
@@ -490,8 +490,8 @@ diff before.sql after.sql
 4. **Foreign key reference errors**
    ```bash
    # Check table dependencies
-   grep -n "foreign_key:" schema/schema.yaml
-   grep -n "name:" schema/schema.yaml | grep "tables"
+   grep -n "foreign_key:" schema/schema.star
+   grep -n "name:" schema/schema.star | grep "tables"
    ```
 
 ## Performance Considerations
@@ -505,7 +505,7 @@ For projects with many schema files:
 time morphic schema-to-sql --verbose
 
 # Consider splitting large schemas
-find . -name "schema.yaml" -exec wc -l {} + | sort -n
+find . -name "schema.star" -exec wc -l {} + | sort -n
 ```
 
 ### Output Redirection
@@ -557,6 +557,6 @@ fi
 ## See Also
 
 - [morphic Command](./morphic.md) - Generate migrations from schemas
-- [Schema Format Guide](../schema-format.md) - YAML schema syntax reference
+- [Schema Format Guide](../schema-format.md) - Starlark schema syntax reference
 - [Configuration Guide](../configuration.md) - Configuration options
 - [init Command](./init.md) - Initialize new projects

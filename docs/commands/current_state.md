@@ -1,16 +1,16 @@
 # current-state Command
 
-The `current-state` command reconstructs the schema state from existing Go migration files and outputs it as YAML. This is the inverse of `schema-to-sql` — instead of showing what the YAML schema would produce, it shows what the migration DAG thinks the current schema looks like.
+The `current-state` command reconstructs the schema state from existing migration files and outputs it as YAML. This is the inverse of `schema-to-sql` — instead of showing what the schema would produce, it shows what the migration DAG thinks the current schema looks like.
 
 ## Overview
 
-The command walks all existing migration `.go` files, builds the migration DAG, applies each operation's `Mutate` in topological order, and serialises the resulting `SchemaState` as YAML to stdout.
+The command walks all existing migration files, builds the migration DAG, applies each operation's `Mutate` in topological order, and serialises the resulting `SchemaState` as YAML to stdout.
 
 This is useful for:
 
 - Debugging why `morphic` keeps generating the same migration
 - Verifying the migration chain produces the expected schema
-- Comparing the reconstructed state against your `schema/schema.yaml` files
+- Comparing the reconstructed state against your `schema/schema.star` files
 - Inspecting foreign key, index, and default state after a long chain of migrations
 
 ## Usage
@@ -70,7 +70,7 @@ Use `diff` to find discrepancies between what the migrations produce and what th
 
 ```bash
 morphic current-state > /tmp/migration_state.yaml
-diff /tmp/migration_state.yaml schema/schema.yaml
+diff /tmp/migration_state.yaml schema/schema.star
 ```
 
 ### Debugging Phantom Migrations
@@ -93,8 +93,8 @@ morphic current-state | yq '.tables[] | select(.name == "users")'
 
 ## How It Works
 
-1. Scans the migrations directory for `.go` files (excluding `main.go`)
-2. Loads all migration files using the yaegi Go interpreter
+1. Scans the migrations directory for `.star` files
+2. Loads all migration files using the Starlark interpreter
 3. Builds the migration DAG and resolves topological order
 4. Applies each migration's operations via `Mutate()` to build `SchemaState`
 5. Converts `SchemaState` to a YAML `Schema` struct (same conversion used by `morphic generate`)
@@ -105,6 +105,6 @@ The conversion in step 5 is the same `schemaStateToYAMLSchema()` function used b
 ## See Also
 
 - [morphic Command](./morphic.md) — generate migrations from schema changes
-- [diff Command](./diff.md) — compare YAML schema against migration state
-- [schema-to-sql Command](./schema_to_sql.md) — preview SQL from YAML schema (no migration state)
+- [diff Command](./diff.md) — compare schema against migration state
+- [schema-to-sql Command](./schema_to_sql.md) — preview SQL from schema (no migration state)
 - [migrate Command](./migrate.md) — apply, rollback, and inspect migrations

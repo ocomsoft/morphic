@@ -34,27 +34,27 @@ import (
 	"github.com/ocomsoft/morphic/internal/interp"
 )
 
-var convertOutputDir string
+var fromMakemigrationsOutputDir string
 
-var convertCmd = &cobra.Command{
-	Use:     "convert [migrations-dir]",
+var fromMakemigrationsCmd = &cobra.Command{
+	Use:     "from-makemigrations [migrations-dir]",
 	Short:   "Convert Go (Yaegi) migrations to Starlark format",
-	Long:    `Reads .go migration files via Yaegi, converts them to .star format, and writes the output to the specified directory.`,
+	Long:    `Reads .go migration files from the old makemigrations format via Yaegi, converts them to .star format, and writes the output to the specified directory.`,
 	GroupID: "convert",
 	Args:    cobra.ExactArgs(1),
-	RunE:    runConvert,
+	RunE:    runFromMakemigrations,
 }
 
 func init() {
-	convertCmd.Flags().StringVarP(&convertOutputDir, "output", "o", "", "Output directory for .star files (required)")
-	_ = convertCmd.MarkFlagRequired("output")
-	rootCmd.AddCommand(convertCmd)
+	fromMakemigrationsCmd.Flags().StringVarP(&fromMakemigrationsOutputDir, "output", "o", "", "Output directory for .star files (required)")
+	_ = fromMakemigrationsCmd.MarkFlagRequired("output")
+	rootCmd.AddCommand(fromMakemigrationsCmd)
 }
 
-func runConvert(cmd *cobra.Command, args []string) error {
+func runFromMakemigrations(cmd *cobra.Command, args []string) error {
 	migrationsDir := args[0]
 
-	if err := os.MkdirAll(convertOutputDir, 0755); err != nil {
+	if err := os.MkdirAll(fromMakemigrationsOutputDir, 0755); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
 	}
 
@@ -80,7 +80,7 @@ func runConvert(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("converting %s: %w", m.Name, convErr)
 		}
 
-		outPath := filepath.Join(convertOutputDir, m.Name+".star")
+		outPath := filepath.Join(fromMakemigrationsOutputDir, m.Name+".star")
 		if writeErr := os.WriteFile(outPath, []byte(src), 0644); writeErr != nil {
 			return fmt.Errorf("writing %s: %w", outPath, writeErr)
 		}
@@ -88,6 +88,6 @@ func runConvert(cmd *cobra.Command, args []string) error {
 		_, _ = fmt.Fprintf(w, "  ✓ %s.star\n", m.Name)
 	}
 
-	_, _ = fmt.Fprintf(w, "\nConverted %d migration(s) to %s\n", len(migrations), convertOutputDir)
+	_, _ = fmt.Fprintf(w, "\nConverted %d migration(s) to %s\n", len(migrations), fromMakemigrationsOutputDir)
 	return nil
 }

@@ -6,7 +6,7 @@ from the migration DAG.
 ## What It Does
 
 1. **Reads migration files** from the migrations directory by loading them
-   in-process via the yaegi Go interpreter, then reconstructs the "expected"
+   in-process via the Starlark interpreter, then reconstructs the "expected"
    schema state by replaying the migration DAG (the same path used by
    `migrate dag --format json`).
 2. **Connects to the live database** and extracts the actual schema using the
@@ -114,7 +114,7 @@ full change description.
 ## Type Normalization
 
 Before comparison, SQL-native types returned by database introspection are
-normalized to the canonical types used in the YAML schema. This prevents
+normalized to the canonical types used in the schema. This prevents
 false-positive diffs caused by databases reporting types differently than how
 they were declared in migration files.
 

@@ -56,7 +56,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ## Project Setup
 
-Initialise the project from your Go application root. This creates the `migrations/` directory with its own Go module, a `main.go` entry point, and a configuration file.
+Initialise the project from your Go application root. This creates the `migrations/` directory and a configuration file.
 
 ```bash
 morphic init --database postgresql
@@ -67,10 +67,8 @@ This produces:
 ```
 myapp/
 ├── go.mod
-├── schema/                     # you create this directory and schema.yaml
+├── schema/                     # you create this directory and schema.star
 └── migrations/
-    ├── go.mod                  # module: myapp/migrations
-    ├── main.go                 # migrations binary entry point
     └── morphic.config.yaml
 ```
 
@@ -84,7 +82,7 @@ mkdir -p schema
 
 ## Creating the Initial Schema
 
-The schema is defined in `schema/schema.yaml`. This file describes every table, field, index, and relationship in a database-agnostic way.
+The schema is defined in `schema/schema.star`. This file describes every table, field, index, and relationship in a database-agnostic way using the Starlark DSL.
 
 The example below demonstrates:
 
@@ -97,12 +95,10 @@ The example below demonstrates:
 - **Foreign keys** with cascading deletes
 - **Indexes** for query performance
 
-Create `schema/schema.yaml`:
+Create `schema/schema.star`:
 
-```yaml
-database:
-  name: myapp
-  version: 1.0.0
+```starlark
+database("myapp", "1.0.0")
 
 # ---------------------------------------------------------------------------
 # Custom type mappings — override the default SQL types for this schema.
@@ -110,220 +106,101 @@ database:
 # the generic default (e.g., CITEXT for case-insensitive text, MONEY for
 # currency, DOUBLE PRECISION for higher-precision floats).
 # ---------------------------------------------------------------------------
-type_mappings:
-  postgresql:
-    # Use CITEXT so email comparisons are case-insensitive without lower()
-    text: "CITEXT"
-    # Use DOUBLE PRECISION instead of the default REAL for floats
-    float: "DOUBLE PRECISION"
+# Use CITEXT so email comparisons are case-insensitive without lower()
+# Use DOUBLE PRECISION instead of the default REAL for floats
+set_type_mappings({"text": "CITEXT", "float": "DOUBLE PRECISION"})
 
 # ---------------------------------------------------------------------------
 # Custom defaults — named aliases for database-specific SQL expressions.
-# Fields reference these by name (e.g., default: new_uuid) rather than
+# Fields reference these by name (e.g., default="new_uuid") rather than
 # embedding raw SQL in the schema, keeping the schema database-agnostic.
 # ---------------------------------------------------------------------------
-defaults:
-  postgresql:
-    blank: "''"
-    now: "CURRENT_TIMESTAMP"
-    new_uuid: "gen_random_uuid()"
-    today: "CURRENT_DATE"
-    zero: "0"
-    true: "true"
-    false: "false"
-    empty_json: "'{}'"
+defaults("postgresql", {
+    "blank":          "''",
+    "now":            "CURRENT_TIMESTAMP",
+    "new_uuid":       "gen_random_uuid()",
+    "today":          "CURRENT_DATE",
+    "zero":           "0",
+    "true":           "true",
+    "false":          "false",
+    "empty_json":     "'{}'",
     # Custom defaults specific to this project
-    default_status: "'active'"
-    default_role: "'member'"
+    "default_status": "'active'",
+    "default_role":   "'member'",
+})
 
-tables:
+# -------------------------------------------------------------------------
+# users — core account table
+# -------------------------------------------------------------------------
+table("users",
+    fields = [
+        uuid("id", primary_key=True, default="new_uuid"),   # resolves to gen_random_uuid() at runtime
+        text("email"),                                        # maps to CITEXT (see set_type_mappings above)
+        varchar("username", 100),
+        varchar("password_hash", 255),
+        varchar("role", 50, default="default_role"),          # resolves to 'member'
+        varchar("status", 50, default="default_status"),      # resolves to 'active'
+        jsonb("metadata", nullable=True, default="empty_json"),  # resolves to '{}'
+        timestamp("created_at", default="now", auto_create=True),  # automatically set on INSERT
+        timestamp("updated_at", nullable=True, auto_update=True),  # automatically set on UPDATE
+    ],
+    indexes = [
+        index("idx_users_email",    ["email"],    unique=True),
+        index("idx_users_username", ["username"], unique=True),
+        index("idx_users_status",   ["status"]),
+    ],
+)
 
-  # -------------------------------------------------------------------------
-  # users — core account table
-  # -------------------------------------------------------------------------
-  - name: users
-    fields:
-      - name: id
-        type: uuid
-        primary_key: true
-        default: new_uuid           # resolves to gen_random_uuid() at runtime
-        nullable: false
+# -------------------------------------------------------------------------
+# categories — product categories (self-referencing for hierarchy)
+# -------------------------------------------------------------------------
+table("categories",
+    fields = [
+        serial("id", primary_key=True),
+        varchar("name", 100),
+        varchar("slug", 100),
+        foreign_key("parent_id", fk("categories", on_delete="SET_NULL"), nullable=True),  # removing a parent keeps the children
+    ],
+    indexes = [
+        index("idx_categories_slug", ["slug"], unique=True),
+    ],
+)
 
-      - name: email
-        type: text                  # maps to CITEXT (see type_mappings above)
-        nullable: false
+# -------------------------------------------------------------------------
+# products — items for sale
+# -------------------------------------------------------------------------
+table("products",
+    fields = [
+        uuid("id", primary_key=True, default="new_uuid"),
+        varchar("name", 255),
+        text("description", nullable=True),
+        decimal("price", 10, 2),
+        float("weight_kg", nullable=True),   # maps to DOUBLE PRECISION (see set_type_mappings)
+        integer("stock_count", default="zero"),  # resolves to 0
+        boolean("is_active", default="true"),    # resolves to true
+        jsonb("metadata", nullable=True, default="empty_json"),
+        timestamp("created_at", default="now", auto_create=True),
+        timestamp("updated_at", nullable=True, auto_update=True),
+    ],
+    indexes = [
+        index("idx_products_name",              ["name"]),
+        index("idx_products_is_active_created", ["is_active", "created_at"]),
+    ],
+)
 
-      - name: username
-        type: varchar
-        length: 100
-        nullable: false
-
-      - name: password_hash
-        type: varchar
-        length: 255
-        nullable: false
-
-      - name: role
-        type: varchar
-        length: 50
-        nullable: false
-        default: default_role       # resolves to 'member'
-
-      - name: status
-        type: varchar
-        length: 50
-        nullable: false
-        default: default_status     # resolves to 'active'
-
-      - name: metadata
-        type: jsonb
-        nullable: true
-        default: empty_json         # resolves to '{}'
-
-      - name: created_at
-        type: timestamp
-        nullable: false
-        default: now
-        auto_create: true           # automatically set on INSERT
-
-      - name: updated_at
-        type: timestamp
-        nullable: true
-        auto_update: true           # automatically set on UPDATE
-
-    indexes:
-      - name: idx_users_email
-        fields: [email]
-        unique: true
-      - name: idx_users_username
-        fields: [username]
-        unique: true
-      - name: idx_users_status
-        fields: [status]
-        unique: false
-
-  # -------------------------------------------------------------------------
-  # categories — product categories (self-referencing for hierarchy)
-  # -------------------------------------------------------------------------
-  - name: categories
-    fields:
-      - name: id
-        type: serial
-        primary_key: true
-
-      - name: name
-        type: varchar
-        length: 100
-        nullable: false
-
-      - name: slug
-        type: varchar
-        length: 100
-        nullable: false
-
-      - name: parent_id
-        type: foreign_key
-        nullable: true
-        foreign_key:
-          table: categories
-          on_delete: SET_NULL       # removing a parent keeps the children
-
-    indexes:
-      - name: idx_categories_slug
-        fields: [slug]
-        unique: true
-
-  # -------------------------------------------------------------------------
-  # products — items for sale
-  # -------------------------------------------------------------------------
-  - name: products
-    fields:
-      - name: id
-        type: uuid
-        primary_key: true
-        default: new_uuid
-        nullable: false
-
-      - name: name
-        type: varchar
-        length: 255
-        nullable: false
-
-      - name: description
-        type: text
-        nullable: true
-
-      - name: price
-        type: decimal
-        precision: 10
-        scale: 2
-        nullable: false
-
-      - name: weight_kg
-        type: float                 # maps to DOUBLE PRECISION (see type_mappings)
-        nullable: true
-
-      - name: stock_count
-        type: integer
-        nullable: false
-        default: zero               # resolves to 0
-
-      - name: is_active
-        type: boolean
-        nullable: false
-        default: true               # resolves to true
-
-      - name: metadata
-        type: jsonb
-        nullable: true
-        default: empty_json
-
-      - name: created_at
-        type: timestamp
-        nullable: false
-        default: now
-        auto_create: true
-
-      - name: updated_at
-        type: timestamp
-        nullable: true
-        auto_update: true
-
-    indexes:
-      - name: idx_products_name
-        fields: [name]
-        unique: false
-      - name: idx_products_is_active_created
-        fields: [is_active, created_at]
-        unique: false
-
-  # -------------------------------------------------------------------------
-  # product_categories — many-to-many junction table
-  # -------------------------------------------------------------------------
-  - name: product_categories
-    fields:
-      - name: id
-        type: serial
-        primary_key: true
-
-      - name: product_id
-        type: foreign_key
-        nullable: false
-        foreign_key:
-          table: products
-          on_delete: CASCADE
-
-      - name: category_id
-        type: foreign_key
-        nullable: false
-        foreign_key:
-          table: categories
-          on_delete: CASCADE
-
-    indexes:
-      - name: idx_product_categories_unique
-        fields: [product_id, category_id]
-        unique: true                # prevents duplicate associations
+# -------------------------------------------------------------------------
+# product_categories — many-to-many junction table
+# -------------------------------------------------------------------------
+table("product_categories",
+    fields = [
+        serial("id", primary_key=True),
+        foreign_key("product_id",  fk("products",   on_delete="CASCADE")),
+        foreign_key("category_id", fk("categories", on_delete="CASCADE")),
+    ],
+    indexes = [
+        index("idx_product_categories_unique", ["product_id", "category_id"], unique=True),  # prevents duplicate associations
+    ],
+)
 ```
 
 ---
@@ -339,67 +216,53 @@ morphic generate --name "initial"
 Output:
 
 ```
-Created migrations/0001_initial.go
+Created migrations/0001_initial.star
 ```
 
-The generated file (`migrations/0001_initial.go`) looks like this:
+The generated file (`migrations/0001_initial.star`) looks like this:
 
-```go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0001_initial",
-        Dependencies: []string{},
-        Operations: []m.Operation{
-            &m.SetDefaults{
-                Defaults: map[string]string{
-                    "blank":          "''",
-                    "now":            "CURRENT_TIMESTAMP",
-                    "new_uuid":       "gen_random_uuid()",
-                    "today":          "CURRENT_DATE",
-                    "zero":           "0",
-                    "true":           "true",
-                    "false":          "false",
-                    "empty_json":     "'{}'",
-                    "default_status": "'active'",
-                    "default_role":   "'member'",
-                },
-            },
-            &m.SetTypeMappings{
-                TypeMappings: map[string]string{
-                    "text":  "CITEXT",
-                    "float": "DOUBLE PRECISION",
-                },
-            },
-            &m.CreateTable{
-                Name: "users",
-                Fields: []m.Field{
-                    {Name: "id",            Type: "uuid",      PrimaryKey: true, Default: "new_uuid"},
-                    {Name: "email",         Type: "text"},
-                    {Name: "username",      Type: "varchar",   Length: 100},
-                    {Name: "password_hash", Type: "varchar",   Length: 255},
-                    {Name: "role",          Type: "varchar",   Length: 50,  Default: "default_role"},
-                    {Name: "status",        Type: "varchar",   Length: 50,  Default: "default_status"},
-                    {Name: "metadata",      Type: "jsonb",     Nullable: true, Default: "empty_json"},
-                    {Name: "created_at",    Type: "timestamp", AutoCreate: true, Default: "now"},
-                    {Name: "updated_at",    Type: "timestamp", Nullable: true, AutoUpdate: true},
-                },
-                Indexes: []m.Index{
-                    {Name: "idx_users_email",    Fields: []string{"email"},    Unique: true},
-                    {Name: "idx_users_username", Fields: []string{"username"}, Unique: true},
-                    {Name: "idx_users_status",   Fields: []string{"status"},   Unique: false},
-                },
-            },
-            // ... categories, products, product_categories CreateTable ops
-        },
-    })
-}
+```starlark
+migration(
+    name = "0001_initial",
+    dependencies = [],
+    operations = [
+        set_type_mappings({"text": "CITEXT", "float": "DOUBLE PRECISION"}),
+        set_defaults({
+            "blank":          "''",
+            "now":            "CURRENT_TIMESTAMP",
+            "new_uuid":       "gen_random_uuid()",
+            "today":          "CURRENT_DATE",
+            "zero":           "0",
+            "true":           "true",
+            "false":          "false",
+            "empty_json":     "'{}'",
+            "default_status": "'active'",
+            "default_role":   "'member'",
+        }),
+        create_table("users",
+            fields = [
+                uuid("id",            primary_key=True, default="new_uuid"),
+                text("email"),
+                varchar("username",      100),
+                varchar("password_hash", 255),
+                varchar("role",          50,  default="default_role"),
+                varchar("status",        50,  default="default_status"),
+                jsonb("metadata",        nullable=True, default="empty_json"),
+                timestamp("created_at", default="now", auto_create=True),
+                timestamp("updated_at", nullable=True, auto_update=True),
+            ],
+            indexes = [
+                index("idx_users_email",    ["email"],    unique=True),
+                index("idx_users_username", ["username"], unique=True),
+                index("idx_users_status",   ["status"]),
+            ],
+        ),
+        # ... categories, products, product_categories create_table ops
+    ],
+)
 ```
 
-> **Note:** `SetDefaults` and `SetTypeMappings` are prepended automatically whenever your schema defines those sections. They carry no SQL — they record the configuration in the migration DAG so subsequent migrations and `showsql` use the correct values.
+> **Note:** `set_defaults` and `set_type_mappings` are prepended automatically whenever your schema defines those sections. They carry no SQL — they record the configuration in the migration DAG so subsequent migrations and `showsql` use the correct values.
 
 ---
 
@@ -409,7 +272,7 @@ Before applying anything, inspect the SQL that will be executed. There are two w
 
 ### Option 1 — dump-sql (schema preview, no migration state)
 
-`schema-to-sql` shows the CREATE TABLE statements that your YAML schema would generate, without consulting the migration history at all:
+`schema-to-sql` shows the CREATE TABLE statements that your Starlark schema would generate, without consulting the migration history at all:
 
 ```bash
 morphic schema-to-sql --database postgresql
@@ -500,7 +363,7 @@ Use `showsql` for final review before production deployments.
 
 ## Applying Migrations
 
-`morphic migrate` loads the migration `.go` files in-process via the [yaegi](https://github.com/traefik/yaegi) Go interpreter and runs them — no `go build`, no temporary binary:
+`morphic migrate` loads the migration `.star` files in-process via the Starlark interpreter and runs them — no `go build`, no temporary binary:
 
 ```bash
 morphic migrate up
@@ -530,57 +393,26 @@ Migration            Status
 
 ## Adding a Table
 
-Suppose you want to add an `orders` table. Edit `schema/schema.yaml` and add the new table definition:
+Suppose you want to add an `orders` table. Edit `schema/schema.star` and add the new table definition:
 
-```yaml
-  # -------------------------------------------------------------------------
-  # orders — customer orders
-  # -------------------------------------------------------------------------
-  - name: orders
-    fields:
-      - name: id
-        type: uuid
-        primary_key: true
-        default: new_uuid
-        nullable: false
-
-      - name: user_id
-        type: foreign_key
-        nullable: false
-        foreign_key:
-          table: users
-          on_delete: RESTRICT       # prevent deleting users with orders
-
-      - name: status
-        type: varchar
-        length: 50
-        nullable: false
-        default: default_status     # resolves to 'active'
-
-      - name: total_amount
-        type: decimal
-        precision: 12
-        scale: 2
-        nullable: false
-        default: zero
-
-      - name: notes
-        type: text                  # CITEXT via type_mappings
-        nullable: true
-
-      - name: placed_at
-        type: timestamp
-        nullable: false
-        default: now
-        auto_create: true
-
-    indexes:
-      - name: idx_orders_user_id
-        fields: [user_id]
-        unique: false
-      - name: idx_orders_status_placed
-        fields: [status, placed_at]
-        unique: false
+```starlark
+# -------------------------------------------------------------------------
+# orders — customer orders
+# -------------------------------------------------------------------------
+table("orders",
+    fields = [
+        uuid("id", primary_key=True, default="new_uuid"),
+        foreign_key("user_id", fk("users", on_delete="RESTRICT")),  # prevent deleting users with orders
+        varchar("status", 50, default="default_status"),             # resolves to 'active'
+        decimal("total_amount", 12, 2, default="zero"),
+        text("notes", nullable=True),                                # CITEXT via set_type_mappings
+        timestamp("placed_at", default="now", auto_create=True),
+    ],
+    indexes = [
+        index("idx_orders_user_id",      ["user_id"]),
+        index("idx_orders_status_placed", ["status", "placed_at"]),
+    ],
+)
 ```
 
 Generate the migration:
@@ -592,10 +424,10 @@ morphic generate --name "add_orders"
 Output:
 
 ```
-Created migrations/0002_add_orders.go
+Created migrations/0002_add_orders.star
 ```
 
-The generated file contains a single `CreateTable` operation. Review then apply:
+The generated file contains a single `create_table` operation. Review then apply:
 
 ```bash
 morphic migrate showsql
@@ -606,21 +438,16 @@ morphic migrate up
 
 ## Adding Fields to an Existing Table
 
-Add a `phone` field and a `last_login_at` timestamp to the `users` table by editing `schema/schema.yaml`:
+Add a `phone` field and a `last_login_at` timestamp to the `users` table by editing `schema/schema.star`:
 
-```yaml
-  - name: users
-    fields:
-      # ... existing fields ...
-
-      - name: phone
-        type: varchar
-        length: 30
-        nullable: true              # nullable so existing rows are not affected
-
-      - name: last_login_at
-        type: timestamp
-        nullable: true
+```starlark
+table("users",
+    fields = [
+        # ... existing fields ...
+        varchar("phone", 30, nullable=True),           # nullable so existing rows are not affected
+        timestamp("last_login_at", nullable=True),
+    ],
+)
 ```
 
 Generate and apply:
@@ -630,17 +457,17 @@ morphic generate --name "add_user_phone_and_last_login"
 morphic migrate up
 ```
 
-The generated migration uses `AddField` for each new column:
+The generated migration uses `add_field` for each new column:
 
-```go
-&m.AddField{
-    Table: "users",
-    Field: m.Field{Name: "phone", Type: "varchar", Length: 30, Nullable: true},
-},
-&m.AddField{
-    Table: "users",
-    Field: m.Field{Name: "last_login_at", Type: "timestamp", Nullable: true},
-},
+```starlark
+migration(
+    name = "0003_add_user_phone_and_last_login",
+    dependencies = ["0002_add_orders"],
+    operations = [
+        add_field("users", varchar("phone", 30, nullable=True)),
+        add_field("users", timestamp("last_login_at", nullable=True)),
+    ],
+)
 ```
 
 > **Tip:** Always add new columns as `nullable: true` or with a default value when the table already has rows. Otherwise the `ALTER TABLE ADD COLUMN` will fail on databases that enforce NOT NULL immediately.
@@ -649,14 +476,16 @@ The generated migration uses `AddField` for each new column:
 
 ## Adding Indexes
 
-Add a composite index on `users(role, status)` for a query that filters by both:
+Add a composite index on `users(role, status)` for a query that filters by both. Edit `schema/schema.star` to add the index to the `users` table:
 
-```yaml
-    indexes:
-      # ... existing indexes ...
-      - name: idx_users_role_status
-        fields: [role, status]
-        unique: false
+```starlark
+table("users",
+    fields = [ # ... existing fields ... ],
+    indexes = [
+        # ... existing indexes ...
+        index("idx_users_role_status", ["role", "status"]),
+    ],
+)
 ```
 
 Generate and apply:
@@ -668,15 +497,16 @@ morphic migrate up
 
 Generated operation:
 
-```go
-&m.AddIndex{
-    Table: "users",
-    Index: m.Index{
-        Name:   "idx_users_role_status",
-        Fields: []string{"role", "status"},
-        Unique: false,
-    },
-},
+```starlark
+migration(
+    name = "0004_add_user_role_status_index",
+    dependencies = ["0003_add_user_phone_and_last_login"],
+    operations = [
+        add_index("users",
+            index("idx_users_role_status", ["role", "status"]),
+        ),
+    ],
+)
 ```
 
 ---
@@ -687,14 +517,10 @@ Suppose you need to expand `status` from `varchar(50)` to `varchar(100)` on the 
 
 ### Simple type change — expand varchar length
 
-Update the field in `schema/schema.yaml`:
+Update the field in `schema/schema.star`:
 
-```yaml
-      - name: status
-        type: varchar
-        length: 100               # was 50
-        nullable: false
-        default: default_status
+```starlark
+varchar("status", 100, default="default_status"),   # was 50
 ```
 
 Generate:
@@ -705,43 +531,41 @@ morphic generate --name "expand_user_status_length"
 
 Generated operation:
 
-```go
-&m.AlterField{
-    Table:    "users",
-    OldField: m.Field{Name: "status", Type: "varchar", Length: 50,  Default: "default_status"},
-    NewField: m.Field{Name: "status", Type: "varchar", Length: 100, Default: "default_status"},
-},
+```starlark
+alter_field("users",
+    old_field = varchar("status", 50,  default="default_status"),
+    new_field = varchar("status", 100, default="default_status"),
+)
 ```
 
 ### Safe NOT NULL migration — add column, backfill, tighten
 
-For `phone`, edit the schema to remove `nullable: true`:
+For `phone`, edit the schema to remove `nullable=True`:
 
-```yaml
-      - name: phone
-        type: varchar
-        length: 30
-        nullable: false
-        default: blank            # resolves to ''
+```starlark
+varchar("phone", 30, default="blank"),   # resolves to ''
 ```
 
 After generating, edit the migration file **before applying** to insert a backfill step:
 
-```go
-// migrations/0005_make_phone_required.go
-Operations: []m.Operation{
-    // Step 1: backfill any NULL values with an empty string
-    &m.RunSQL{
-        ForwardSQL:  "UPDATE users SET phone = '' WHERE phone IS NULL",
-        BackwardSQL: "",  // intentionally irreversible
-    },
-    // Step 2: tighten to NOT NULL
-    &m.AlterField{
-        Table:    "users",
-        OldField: m.Field{Name: "phone", Type: "varchar", Length: 30, Nullable: true},
-        NewField: m.Field{Name: "phone", Type: "varchar", Length: 30, Default: "blank"},
-    },
-},
+```starlark
+# migrations/0005_make_phone_required.star
+migration(
+    name = "0005_make_phone_required",
+    dependencies = ["0004_add_user_role_status_index"],
+    operations = [
+        # Step 1: backfill any NULL values with an empty string
+        run_sql(
+            forward = "UPDATE users SET phone = '' WHERE phone IS NULL",
+            # intentionally no backward — irreversible
+        ),
+        # Step 2: tighten to NOT NULL
+        alter_field("users",
+            old_field = varchar("phone", 30, nullable=True),
+            new_field = varchar("phone", 30, default="blank"),
+        ),
+    ],
+)
 ```
 
 Apply:
@@ -755,7 +579,7 @@ morphic migrate up
 
 ## Removing a Field
 
-Remove the `notes` field from `orders`. Delete it from `schema/schema.yaml`, then generate:
+Remove the `notes` field from `orders`. Delete it from `schema/schema.star`, then generate:
 
 ```bash
 morphic generate --name "remove_order_notes"
@@ -775,8 +599,8 @@ Choice [1-5]: 1
 
 Choose **1** to generate the drop, or **2** to flag it for peer review first. The generated operation:
 
-```go
-&m.DropField{Table: "orders", Field: "notes"},
+```starlark
+drop_field("orders", "notes")
 ```
 
 Apply after review:
@@ -789,7 +613,7 @@ morphic migrate up
 
 ## Removing a Table
 
-Remove `product_categories` from `schema/schema.yaml` entirely, then generate:
+Remove `product_categories` from `schema/schema.star` entirely, then generate:
 
 ```bash
 morphic generate --name "remove_product_categories"
@@ -797,8 +621,8 @@ morphic generate --name "remove_product_categories"
 
 Again you will be prompted for the destructive operation. The generated operation:
 
-```go
-&m.DropTable{Name: "product_categories"},
+```starlark
+drop_table("product_categories")
 ```
 
 > **Warning:** This permanently drops the table and all its data. Verify with `morphic migrate showsql` before running `up`.
@@ -807,21 +631,16 @@ Again you will be prompted for the destructive operation. The generated operatio
 
 ## Inserting Seed Data
 
-Data migrations use `RunSQL` and are written **by hand** — the diff engine only generates DDL operations. Create a new file in `migrations/`:
+Data migrations use `run_sql` or `upsert_data` and are written **by hand** — the diff engine only generates DDL operations. Create a new file in `migrations/`:
 
-```go
-// migrations/0008_seed_categories.go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0008_seed_categories",
-        Dependencies: []string{"0007_remove_product_categories"},
-        Operations: []m.Operation{
-            &m.RunSQL{
-                ForwardSQL: `
+```starlark
+# migrations/0008_seed_categories.star
+migration(
+    name = "0008_seed_categories",
+    dependencies = ["0007_remove_product_categories"],
+    operations = [
+        run_sql(
+            forward = """
 INSERT INTO categories (name, slug, parent_id) VALUES
     ('Electronics',       'electronics',       NULL),
     ('Clothing',          'clothing',          NULL),
@@ -830,19 +649,18 @@ INSERT INTO categories (name, slug, parent_id) VALUES
     ('Laptops',           'laptops',           1),
     ('Men''s Clothing',   'mens-clothing',     2),
     ('Women''s Clothing', 'womens-clothing',   2);
-`,
-                BackwardSQL: `
+""",
+            backward = """
 DELETE FROM categories
 WHERE slug IN (
     'electronics', 'clothing', 'books',
     'smartphones', 'laptops',
     'mens-clothing', 'womens-clothing'
 );
-`,
-            },
-        },
-    })
-}
+""",
+        ),
+    ],
+)
 ```
 
 Apply:
@@ -857,21 +675,16 @@ morphic migrate up
 
 ## Adding a Stored Procedure
 
-Stored procedures (and any other PostgreSQL-specific DDL like views, triggers, or custom functions) are added using `RunSQL`. The `BackwardSQL` should drop the procedure so rollback works cleanly.
+Stored procedures (and any other PostgreSQL-specific DDL like views, triggers, or custom functions) are added using `run_sql`. The `backward` should drop the procedure so rollback works cleanly.
 
-```go
-// migrations/0009_add_calculate_order_total_proc.go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0009_add_calculate_order_total_proc",
-        Dependencies: []string{"0008_seed_categories"},
-        Operations: []m.Operation{
-            &m.RunSQL{
-                ForwardSQL: `
+```starlark
+# migrations/0009_add_calculate_order_total_proc.star
+migration(
+    name = "0009_add_calculate_order_total_proc",
+    dependencies = ["0008_seed_categories"],
+    operations = [
+        run_sql(
+            forward = """
 CREATE OR REPLACE FUNCTION calculate_order_total(p_user_id UUID)
 RETURNS TABLE (
     order_id    UUID,
@@ -900,32 +713,24 @@ $$;
 
 COMMENT ON FUNCTION calculate_order_total(UUID)
     IS 'Returns a summary of all orders for a given user, including item count and total price.';
-`,
-                BackwardSQL: `
-DROP FUNCTION IF EXISTS calculate_order_total(UUID);
-`,
-            },
-        },
-    })
-}
+""",
+            backward = "DROP FUNCTION IF EXISTS calculate_order_total(UUID);",
+        ),
+    ],
+)
 ```
 
 For a simpler example — a trigger that keeps `updated_at` current without relying on the application layer:
 
-```go
-// migrations/0010_add_updated_at_trigger.go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0010_add_updated_at_trigger",
-        Dependencies: []string{"0009_add_calculate_order_total_proc"},
-        Operations: []m.Operation{
-            // Create the shared trigger function once
-            &m.RunSQL{
-                ForwardSQL: `
+```starlark
+# migrations/0010_add_updated_at_trigger.star
+migration(
+    name = "0010_add_updated_at_trigger",
+    dependencies = ["0009_add_calculate_order_total_proc"],
+    operations = [
+        # Create the shared trigger function once
+        run_sql(
+            forward = """
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -935,38 +740,31 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-`,
-                BackwardSQL: `
-DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
-`,
-            },
-            // Attach the trigger to the users table
-            &m.RunSQL{
-                ForwardSQL: `
+""",
+            backward = "DROP FUNCTION IF EXISTS set_updated_at() CASCADE;",
+        ),
+        # Attach the trigger to the users table
+        run_sql(
+            forward = """
 CREATE TRIGGER trg_users_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
-`,
-                BackwardSQL: `
-DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
-`,
-            },
-            // Attach the trigger to the orders table
-            &m.RunSQL{
-                ForwardSQL: `
+""",
+            backward = "DROP TRIGGER IF EXISTS trg_users_updated_at ON users;",
+        ),
+        # Attach the trigger to the orders table
+        run_sql(
+            forward = """
 CREATE TRIGGER trg_orders_updated_at
 BEFORE UPDATE ON orders
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
-`,
-                BackwardSQL: `
-DROP TRIGGER IF EXISTS trg_orders_updated_at ON orders;
-`,
-            },
-        },
-    })
-}
+""",
+            backward = "DROP TRIGGER IF EXISTS trg_orders_updated_at ON orders;",
+        ),
+    ],
+)
 ```
 
 Apply:
@@ -998,20 +796,20 @@ Roll back until (but not including) a specific migration:
 morphic migrate down --to 0005_make_phone_required
 ```
 
-Each operation's `Down` reverses the forward change automatically for typed operations (`CreateTable` → `DROP TABLE`, `AddField` → `DROP COLUMN`, etc.). `RunSQL` operations use the `BackwardSQL` you provided.
+Each operation's down path reverses the forward change automatically for typed operations (`create_table` → `DROP TABLE`, `add_field` → `DROP COLUMN`, etc.). `run_sql` operations use the `backward` SQL you provided.
 
 ---
 
 ## Day-to-Day Workflow Summary
 
 ```
-Edit schema/schema.yaml
+Edit schema/schema.star
         │
         ▼
 morphic generate --name "describe_the_change"
         │
         ▼
-(optional) edit the generated .go file to add RunSQL data steps
+(optional) edit the generated .star file to add run_sql data steps
         │
         ▼
 morphic migrate showsql          ← review SQL before touching the DB
@@ -1032,8 +830,8 @@ morphic migrate status           ← verify
 | `morphic generate --dry-run` | Preview migration source without writing a file |
 | `morphic generate --check` | CI mode: exit 1 if migrations are needed |
 | `morphic generate --merge` | Generate a merge migration for concurrent branches |
-| `morphic current-state` | Show reconstructed schema from migration DAG as YAML |
-| `morphic schema-to-sql` | Show full CREATE TABLE SQL from the YAML schema |
+| `morphic current-state` | Show reconstructed schema from migration DAG as Starlark |
+| `morphic schema-to-sql` | Show full CREATE TABLE SQL from the Starlark schema |
 | `morphic schema-to-sql --verbose` | Include processing detail in the output |
 | `morphic migrate showsql` | Show SQL for all pending migrations |
 | `morphic migrate up` | Apply all pending migrations |
@@ -1048,12 +846,12 @@ morphic migrate status           ← verify
 
 ## See Also
 
-- [Schema Format Reference](schema-format.md) — complete YAML schema syntax
-- [Migrations Writing Guide](migrations.md) — anatomy of migration files and all operation types
+- [Schema Format Reference](schema-format.md) — complete Starlark schema DSL syntax
+- [Starlark Migrations Guide](starlark-migrations.md) — Starlark DSL reference and all operation types
 - [init Command](commands/init.md) — detailed init options
 - [morphic Command](commands/morphic.md) — all generation flags
 - [migrate Command](commands/migrate.md) — all runtime commands and flags
-- [diff Command](commands/diff.md) — compare YAML schema against migration state
+- [diff Command](commands/diff.md) — compare schema against migration state
 - [db-diff Command](commands/db-diff.md) — compare migration state against live database
 - [current-state Command](commands/current-state.md) — inspect reconstructed migration state
 - [schema-to-sql Command](commands/schema_to_sql.md) — schema inspection command

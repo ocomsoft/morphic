@@ -1,12 +1,12 @@
 # generate Command
 
-The `generate` command is the **primary command** for generating Go-based database migrations from YAML schema definitions. It implements a Django-style migration workflow where each migration is a typed Go file registered in a DAG (directed acyclic graph).
+The `generate` command is the **primary command** for generating database migrations from Starlark schema definitions. It implements a Django-style migration workflow where each migration is a typed Starlark file registered in a DAG (directed acyclic graph).
 
 ## Overview
 
-The `generate` command compares the desired schema (defined in YAML files) against the current schema (reconstructed by replaying all registered Go migration files) and generates a new `.go` migration file containing typed operations for each detected change.
+The `generate` command compares the desired schema (defined in Starlark files) against the current schema (reconstructed by replaying all registered migration files) and generates a new `.star` migration file containing typed operations for each detected change.
 
-Unlike the SQL-mode commands, Go migrations are real `.go` source files. They run via `morphic migrate up` (etc.), which loads them in-process with the [yaegi](https://github.com/traefik/yaegi) Go interpreter — no `go build`, no temporary binary, no Go toolchain at runtime. The same files can also be compiled into a self-contained binary as an optional fallback.
+Unlike the SQL-mode commands, migrations are `.star` source files. They run via `morphic migrate up` (etc.), which loads them in-process with the Starlark interpreter — no compilation step, no temporary binary, no Go toolchain at runtime.
 
 ## Usage
 
@@ -34,15 +34,15 @@ morphic generate [flags]
 
 The command runs a five-step pipeline each time it is invoked.
 
-### Step 1 — Scan for existing Go migration files
+### Step 1 — Scan for existing migration files
 
-The command scans the `migrations/` directory (as configured) for `*.go` files, excluding `main.go`. If no migration files exist, the current schema state is treated as empty.
+The command scans the `migrations/` directory (as configured) for `*.star` files. If no migration files exist, the current schema state is treated as empty.
 
 ### Step 2 — Query the DAG for the current schema state
 
 When migration files exist, the command:
 
-1. Loads all `*.go` files in the migrations directory in-process via `internal/interp.LoadRegistry`. The yaegi Go interpreter runs each file's `init()`, registering its `Migration` into a fresh `*migrate.Registry`. No `go build` is invoked.
+1. Loads all `*.star` files in the migrations directory in-process via `internal/interp.LoadRegistry`. The Starlark interpreter runs each file's top-level `migration()` call, registering its `Migration` into a fresh `*migrate.Registry`.
 2. Calls `migrate.BuildGraph(reg).ToDAGOutput()` to produce a `DAGOutput` value containing:
    - The full migration graph (names, dependencies, operations)
    - The reconstructed `SchemaState` (all tables, fields, and indexes after replaying every migration in topological order)
@@ -51,9 +51,9 @@ When migration files exist, the command:
 
 The registry and graph live only for the duration of this query; nothing is written to disk.
 
-### Step 3 — Parse the YAML schema
+### Step 3 — Parse the schema
 
-The command parses `schema/schema.yaml` (and any files it includes) to produce the **desired** schema state. This uses the same YAML parser as all other `morphic` commands.
+The command parses `schema/schema.star` (and any files it includes) to produce the **desired** schema state. This uses the same Starlark schema parser as all other `morphic` commands.
 
 ### Step 4 — Diff the two schemas
 
@@ -72,198 +72,174 @@ Depending on the flags:
 
 ## Generated File Format
 
-Each generated file is in `package main` and calls `m.Register()` from an `init()` function. This ensures the migration is automatically registered when the migrations binary starts.
+Each generated file calls the top-level `migration()` function. This ensures the migration is automatically registered when the Starlark interpreter loads the file.
 
-```go
-// migrations/0001_initial.go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0001_initial",
-        Dependencies: []string{},
-        Operations: []m.Operation{
-            &m.CreateTable{
-                Name: "users",
-                Fields: []m.Field{
-                    {Name: "id", Type: "uuid", PrimaryKey: true, Nullable: true},
-                    {Name: "email", Type: "varchar", Length: 255, Nullable: true},
-                    {Name: "created_at", Type: "timestamp", AutoCreate: true, Nullable: true},
-                },
-                Indexes: []m.Index{
-                    {Name: "idx_users_email", Fields: []string{"email"}, Unique: true},
-                },
-            },
-        },
-    })
-}
+```python
+# migrations/0001_initial.star
+migration(
+    name = "0001_initial",
+    dependencies = [],
+    operations = [
+        create_table("users",
+            fields = [
+                uuid("id", primary_key = True),
+                string("email", length = 255),
+                timestamp("created_at", auto_create = True),
+            ],
+            indexes = [
+                index("idx_users_email", fields = ["email"], unique = True),
+            ],
+        ),
+    ],
+)
 ```
 
 ### File Naming Convention
 
 ```
-migrations/NNNN_name.go
+migrations/NNNN_name.star
 ```
 
 Where `NNNN` is a zero-padded four-digit sequence number based on the count of existing migration files, and `name` is either the `--name` flag value (lowercased, spaces replaced with underscores) or a name auto-generated from the diff content.
 
 Examples:
-- `migrations/0001_initial.go`
-- `migrations/0002_add_products.go`
-- `migrations/0003_rename_user_email.go`
-- `migrations/0004_merge.go` (merge migration)
+- `migrations/0001_initial.star`
+- `migrations/0002_add_products.star`
+- `migrations/0003_rename_user_email.star`
+- `migrations/0004_merge.star` (merge migration)
 
 ## Operation Types
 
 There are 10 typed operation types. Each operation implements `Up()` (forward SQL), `Down()` (reverse SQL), and `Mutate()` (updates the in-memory schema state for DAG traversal).
 
-### CreateTable
+### create_table
 
 Creates a new database table with the specified fields and indexes.
 
-```go
-&m.CreateTable{
-    Name: "products",
-    Fields: []m.Field{
-        {Name: "id", Type: "uuid", PrimaryKey: true, Nullable: true},
-        {Name: "name", Type: "varchar", Length: 255, Nullable: true},
-        {Name: "price", Type: "decimal", Precision: 10, Scale: 2, Nullable: true},
-        {Name: "active", Type: "boolean", Default: "true", Nullable: true},
-        {Name: "created_at", Type: "timestamp", AutoCreate: true, Nullable: true},
-        {Name: "updated_at", Type: "timestamp", AutoUpdate: true, Nullable: true},
-    },
-    Indexes: []m.Index{
-        {Name: "idx_products_name", Fields: []string{"name"}, Unique: false},
-    },
-},
+```python
+create_table("products",
+    fields = [
+        uuid("id", primary_key = True),
+        string("name", length = 255),
+        decimal("price", precision = 10, scale = 2),
+        boolean("active", default = True),
+        timestamp("created_at", auto_create = True),
+        timestamp("updated_at", auto_update = True),
+    ],
+    indexes = [
+        index("idx_products_name", fields = ["name"], unique = False),
+    ],
+)
 ```
 
 - **Destructive**: No
 - **Down**: emits `DROP TABLE`
 
-### DropTable
+### drop_table
 
 Drops an existing database table.
 
-```go
-&m.DropTable{Name: "old_sessions"},
+```python
+drop_table("old_sessions")
 ```
 
 - **Destructive**: Yes — all data in the table is lost
 - **Down**: reconstructs `CREATE TABLE` from the pre-drop schema state
 
-### RenameTable
+### rename_table
 
 Renames an existing table.
 
-```go
-&m.RenameTable{OldName: "users", NewName: "accounts"},
+```python
+rename_table("users", "accounts")
 ```
 
 - **Destructive**: No
 - **Down**: emits the reverse rename
 
-### AddField
+### add_field
 
 Adds a new column to an existing table.
 
-```go
-&m.AddField{
-    Table: "users",
-    Field: m.Field{
-        Name:     "phone",
-        Type:     "varchar",
-        Length:   20,
-        Nullable: true,
-    },
-},
+```python
+add_field("users", string("phone", length = 20, nullable = True))
 ```
 
 - **Destructive**: No
 - **Down**: emits `DROP COLUMN`
 
-### DropField
+### drop_field
 
 Removes a column from an existing table.
 
-```go
-&m.DropField{Table: "users", Field: "legacy_token"},
+```python
+drop_field("users", "legacy_token")
 ```
 
 - **Destructive**: Yes — all data in that column is lost
 - **Down**: reconstructs `ADD COLUMN` from the pre-drop schema state
 
-### AlterField
+### alter_field
 
 Changes a column's type, length, nullability, default, or other constraints. Both the old and new field definitions are stored so the operation can be reversed exactly.
 
-```go
-&m.AlterField{
-    Table: "users",
-    OldField: m.Field{Name: "status", Type: "varchar", Length: 50, Nullable: true},
-    NewField: m.Field{Name: "status", Type: "varchar", Length: 100, Nullable: true},
-},
+```python
+alter_field("users",
+    old_field = string("status", length = 50, nullable = True),
+    new_field = string("status", length = 100, nullable = True),
+)
 ```
 
 - **Destructive**: No (though incompatible type changes may fail at the database level)
 - **Down**: emits the reverse `ALTER COLUMN` restoring the old definition
 
-### RenameField
+### rename_field
 
 Renames a column in an existing table.
 
-```go
-&m.RenameField{Table: "users", OldName: "username", NewName: "display_name"},
+```python
+rename_field("users", "username", "display_name")
 ```
 
 - **Destructive**: No
 - **Down**: emits the reverse rename
 
-### AddIndex
+### add_index
 
 Creates an index on one or more columns of an existing table.
 
-```go
-&m.AddIndex{
-    Table: "orders",
-    Index: m.Index{
-        Name:   "idx_orders_user_id",
-        Fields: []string{"user_id", "created_at"},
-        Unique: false,
-    },
-},
+```python
+add_index("orders", index("idx_orders_user_id", fields = ["user_id", "created_at"], unique = False))
 ```
 
 - **Destructive**: No
 - **Down**: emits `DROP INDEX`
 
-### DropIndex
+### drop_index
 
 Drops an index from a table.
 
-```go
-&m.DropIndex{Table: "orders", Index: "idx_orders_legacy"},
+```python
+drop_index("orders", "idx_orders_legacy")
 ```
 
 - **Destructive**: No (index can be recreated)
 - **Down**: reconstructs `CREATE INDEX` from the pre-drop schema state
 
-### RunSQL
+### run_sql
 
-Executes raw SQL directly. Used for data migrations, custom constraints, triggers, or any operation that cannot be expressed as a typed operation. `RunSQL` does not update the schema state.
+Executes raw SQL directly. Used for data migrations, custom constraints, triggers, or any operation that cannot be expressed as a typed operation. `run_sql` does not update the schema state.
 
-```go
-&m.RunSQL{
-    ForwardSQL:  "UPDATE users SET status = 'active' WHERE status IS NULL;",
-    BackwardSQL: "UPDATE users SET status = NULL WHERE status = 'active';",
-},
+```python
+run_sql(
+    forward = "UPDATE users SET status = 'active' WHERE status IS NULL;",
+    backward = "UPDATE users SET status = NULL WHERE status = 'active';",
+)
 ```
 
 - **Destructive**: No (depends entirely on the SQL content)
-- **Down**: executes `BackwardSQL`
-- **Note**: `RunSQL` operations are not auto-generated by the diff engine. Add them manually when needed.
+- **Down**: executes `backward` SQL
+- **Note**: `run_sql` operations are not auto-generated by the diff engine. Add them manually when needed.
 
 ## Destructive Operation Prompt
 
@@ -283,15 +259,15 @@ Choice [1-5]:
 
 | Option | Effect | Generated code |
 |--------|--------|----------------|
-| **1) Generate** | Operation is included and will run normally on `migrate up` | `&m.DropTable{Name: "..."}` |
-| **2) Review** | Operation is included but preceded by a `// REVIEW` comment to flag for human inspection | `// REVIEW\n&m.DropTable{...}` |
-| **3) Omit** | Operation is included with `SchemaOnly: true` — schema state advances but no SQL is executed | `&m.DropTable{Name: "...", SchemaOnly: true}` |
+| **1) Generate** | Operation is included and will run normally on `migrate up` | `drop_table("...")` |
+| **2) Review** | Operation is included but preceded by a `# REVIEW` comment to flag for human inspection | `# REVIEW\ndrop_table("...")` |
+| **3) Omit** | Operation is included with `schema_only = True` — schema state advances but no SQL is executed | `drop_table("...", schema_only = True)` |
 | **4) Exit** | Migration generation is cancelled; no file is written | — |
 | **5) All** | Remaining destructive operations all use option 1 without further prompting | — |
 
-### SchemaOnly
+### schema_only
 
-When `SchemaOnly: true` is set on an operation, the runner treats the table or field as already removed from the database (no SQL is executed) but updates the in-memory schema state as if it had been. This is useful when you have already manually dropped the table or field outside of migrations.
+When `schema_only = True` is set on an operation, the runner treats the table or field as already removed from the database (no SQL is executed) but updates the in-memory schema state as if it had been. This is useful when you have already manually dropped the table or field outside of migrations.
 
 ### Skipping the Prompt
 
@@ -305,34 +281,27 @@ This is equivalent to always choosing option 1. Useful in automated or non-inter
 
 ## Field Type Reference
 
-The `m.Field` struct supports the following properties:
+Starlark schema files use typed field builtins. The following builtins are available:
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Name` | string | Column name (required) |
-| `Type` | string | Column type: `varchar`, `text`, `integer`, `bigint`, `boolean`, `uuid`, `timestamp`, `date`, `decimal`, `json`, `jsonb`, `foreign_key` |
-| `PrimaryKey` | bool | Mark as primary key |
-| `Nullable` | bool | Allow NULL values |
-| `Default` | string | Default value reference: `"new_uuid"`, `"now"`, `"true"`, `"false"` |
-| `Length` | int | Character length for `varchar` |
-| `Precision` | int | Total digits for `decimal`/`numeric` |
-| `Scale` | int | Decimal places for `decimal`/`numeric` |
-| `AutoCreate` | bool | Automatically set on row creation (`created_at` pattern) |
-| `AutoUpdate` | bool | Automatically set on row update (`updated_at` pattern) |
-| `ForeignKey` | `*m.ForeignKey` | Foreign key constraint |
-| `ManyToMany` | `*m.ManyToMany` | Many-to-many relationship via junction table |
+| Builtin | Key Parameters | Description |
+|---------|---------------|-------------|
+| `uuid(name)` | `primary_key`, `nullable` | UUID column |
+| `string(name, length)` | `nullable`, `default` | VARCHAR column |
+| `text(name)` | `nullable`, `default` | TEXT column |
+| `integer(name)` | `nullable`, `default` | INTEGER column |
+| `bigint(name)` | `nullable`, `default` | BIGINT column |
+| `boolean(name)` | `nullable`, `default` | BOOLEAN column |
+| `timestamp(name)` | `nullable`, `default`, `auto_create`, `auto_update` | TIMESTAMP column |
+| `date(name)` | `nullable`, `default` | DATE column |
+| `decimal(name)` | `precision`, `scale`, `nullable`, `default` | DECIMAL/NUMERIC column |
+| `json(name)` | `nullable` | JSON column |
+| `jsonb(name)` | `nullable` | JSONB column |
+| `foreign_key(name, table)` | `on_delete`, `nullable` | Foreign key constraint |
 
-### ForeignKey
+### foreign_key
 
-```go
-m.Field{
-    Name: "user_id",
-    Type: "foreign_key",
-    ForeignKey: &m.ForeignKey{
-        Table:    "users",
-        OnDelete: "CASCADE",
-    },
-},
+```python
+foreign_key("user_id", table = "users", on_delete = "CASCADE", nullable = False)
 ```
 
 ## Examples
@@ -368,26 +337,19 @@ Preview the generated Go source without writing a file:
 morphic generate --dry-run
 ```
 
-```go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name:         "0002_add_products",
-        Dependencies: []string{"0001_initial"},
-        Operations: []m.Operation{
-            &m.CreateTable{
-                Name: "products",
-                Fields: []m.Field{
-                    {Name: "id", Type: "uuid", PrimaryKey: true, Nullable: true},
-                    {Name: "name", Type: "varchar", Length: 255, Nullable: true},
-                },
-            },
-        },
-    })
-}
+```python
+migration(
+    name = "0002_add_products",
+    dependencies = ["0001_initial"],
+    operations = [
+        create_table("products",
+            fields = [
+                uuid("id", primary_key = True),
+                string("name", length = 255),
+            ],
+        ),
+    ],
+)
 ```
 
 ### CI/CD Check Mode
@@ -406,7 +368,7 @@ morphic generate --check
 morphic generate --verbose
 
 # Output
-Loading migrations/ via yaegi...
+Loading migrations/ via Starlark interpreter...
 No changes detected.
 ```
 
@@ -419,27 +381,27 @@ No changes detected.
 morphic init
 
 # 2. Edit the schema
-vim schema/schema.yaml
+vim schema/schema.star
 
 # 3. Generate the first migration
 morphic generate --name "initial"
-# Created migrations/0001_initial.go
+# Created migrations/0001_initial.star
 
-# 4. Apply (yaegi loads the .go file in-process — no go build)
+# 4. Apply (Starlark interpreter loads the .star file in-process)
 morphic migrate up
 ```
 
 ### Adding a New Table
 
 ```bash
-# 1. Add the 'products' table to schema/schema.yaml
+# 1. Add the 'products' table to schema/schema.star
 
 # 2. Generate the migration
 morphic generate --name "add_products"
-# Created migrations/0002_add_products.go
+# Created migrations/0002_add_products.star
 
 # 3. Review the generated file
-cat migrations/0002_add_products.go
+cat migrations/0002_add_products.star
 
 # 4. Apply
 morphic migrate up
@@ -448,11 +410,11 @@ morphic migrate up
 ### Altering an Existing Field
 
 ```bash
-# 1. Change 'status' field from varchar(50) to varchar(100) in schema/schema.yaml
+# 1. Change 'status' field from varchar(50) to varchar(100) in schema/schema.star
 
 # 2. Generate
 morphic generate --name "expand_user_status"
-# Created migrations/0003_expand_user_status.go
+# Created migrations/0003_expand_user_status.star
 
 # 3. Apply
 morphic migrate up
@@ -478,28 +440,22 @@ A merge migration has two (or more) entries in `Dependencies` and an empty `Oper
 
 ```bash
 morphic generate --merge
-# Created merge migration: migrations/0003_merge_0002_add_products_and_0002_add_orders.go
+# Created merge migration: migrations/0003_merge_0002_add_products_and_0002_add_orders.star
 # Dependencies: 0002_add_products, 0002_add_orders
 ```
 
 The generated file looks like:
 
-```go
-// migrations/0003_merge_0002_add_products_and_0002_add_orders.go
-package main
-
-import m "github.com/ocomsoft/morphic/migrate"
-
-func init() {
-    m.Register(&m.Migration{
-        Name: "0003_merge_0002_add_products_and_0002_add_orders",
-        Dependencies: []string{
-            "0002_add_products",
-            "0002_add_orders",
-        },
-        Operations: []m.Operation{},
-    })
-}
+```python
+# migrations/0003_merge_0002_add_products_and_0002_add_orders.star
+migration(
+    name = "0003_merge_0002_add_products_and_0002_add_orders",
+    dependencies = [
+        "0002_add_products",
+        "0002_add_orders",
+    ],
+    operations = [],
+)
 ```
 
 After the merge migration is committed, both branches can apply `./migrate up` in any order. The merge node ensures the graph remains acyclic with a single leaf.
@@ -560,56 +516,14 @@ After initialisation and several generated migrations, the `migrations/` directo
 
 ```
 migrations/
-├── go.mod              # Module file: myproject/migrations  (used by IDE/gopls)
-├── go.sum
-├── main.go             # Optional standalone-binary entry point  (NOT used by `morphic migrate`)
-├── 0001_initial.go     # Auto-generated
-├── 0002_add_products.go
-└── 0003_expand_user_status.go
-```
-
-### main.go (optional)
-
-`main.go` is generated once by `morphic init`. **It is not invoked by `morphic migrate`** — that command interprets the migration files in-process via yaegi. The file exists so you can `go build` the directory into a self-contained binary if you want one. Safe to delete if you only ever use `morphic migrate`:
-
-```go
-package main
-
-import (
-    "fmt"
-    "os"
-
-    m "github.com/ocomsoft/morphic/migrate"
-)
-
-func main() {
-    app := m.NewApp(m.Config{
-        Registry: m.GlobalRegistry(),
-    })
-    if err := app.Run(os.Args[1:]); err != nil {
-        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-        os.Exit(1)
-    }
-}
-```
-
-### go.mod
-
-`go.mod` is also generated once and pins the `morphic` runtime:
-
-```
-module myproject/migrations
-
-go 1.24
-
-require (
-    github.com/ocomsoft/morphic v0.3.0
-)
+├── 0001_initial.star     # Auto-generated
+├── 0002_add_products.star
+└── 0003_expand_user_status.star
 ```
 
 ## After Generating a Migration
 
-There is **no rebuild step**. `morphic migrate` re-reads the latest migration files on every invocation and interprets them in-process via yaegi:
+There is **no rebuild step**. `morphic migrate` re-reads the latest migration files on every invocation and interprets them in-process via the Starlark interpreter:
 
 ```bash
 morphic migrate up
@@ -643,7 +557,7 @@ database:
   type: postgresql          # Target database: postgresql, mysql, sqlite, sqlserver
 
 migration:
-  directory: migrations     # Where .go migration files are written
+  directory: migrations     # Where .star migration files are written
 ```
 
 ## Error Handling
@@ -652,18 +566,17 @@ migration:
 
 **No schema files found**
 ```
-Error: parsing YAML schema: no schema files found
+Error: parsing schema: no schema files found
 ```
-Create `schema/schema.yaml` or check the search paths.
+Create `schema/schema.star` or check the search paths.
 
-**yaegi load failure in migrations directory**
+**Starlark load failure in migrations directory**
 ```
 Error: querying migration DAG: loading migrations: interpreting <file>: ...
 ```
-yaegi failed to interpret a migration file. Common causes:
-- A typo or syntax error in a hand-edited migration. Run `cd migrations && go vet ./...` or open the file in your IDE — `gopls` will surface the same error with better context.
-- An `import` of a third-party package not in the yaegi symbol map. See [Extending the yaegi Symbol Map](../extending-yaegi-symbols.md).
-- A language feature yaegi does not support (cgo, certain reflection patterns). Either rewrite the migration to avoid it or use the optional standalone-binary path: `cd migrations && go mod tidy && go build -o migrate . && ./migrate up`.
+The Starlark interpreter failed to load a migration file. Common causes:
+- A typo or syntax error in a hand-edited migration. Open the file in your editor and check the reported line number.
+- An unsupported Starlark expression or built-in. Refer to the [Schema Format Guide](../schema-format.md) for the list of available builtins.
 
 **Missing dependency**
 ```
@@ -686,7 +599,7 @@ Exit code 1. Schema and migrations are out of sync. Generate the migration and c
 
 ## See Also
 
-- [init-go Command](./init.md) — Initialise the migrations directory for Go migrations
-- [Schema Format Guide](../schema-format.md) — Complete YAML schema reference
+- [init Command](./init.md) — Initialise the migrations directory
+- [Schema Format Guide](../schema-format.md) — Complete Starlark schema reference
 - [Configuration Guide](../configuration.md) — Configuration options
 - [Architecture Guide](../architecture.md) — How the DAG and migration framework work

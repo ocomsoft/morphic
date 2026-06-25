@@ -1,14 +1,14 @@
 # `schema-diff` Command
 
-Compares the current YAML schema files against the migration DAG state and
+Compares the current schema files against the migration DAG state and
 shows the differences in both directions.
 
 ## What It Does
 
 1. **Reads migration files** from the migrations directory by loading them
-   in-process via the yaegi Go interpreter, then reconstructs the "expected"
+   in-process via the Starlark interpreter, then reconstructs the "expected"
    schema state by replaying the migration DAG.
-2. **Scans and merges YAML schema files** from the current module and its
+2. **Scans and merges schema files** from the current module and its
    dependencies (same discovery used by `morphic generate`).
 3. **Diffs the two schemas** and reports differences grouped by direction
    and category.
@@ -16,10 +16,10 @@ shows the differences in both directions.
 ## Difference Categories
 
 - **In Schema, Not Yet Migrated** — Tables, fields, or indexes present in
-  `schema.yaml` but not yet captured in a migration. Running
+  `schema.star` but not yet captured in a migration. Running
   `morphic generate` would generate code for these.
 - **In Migrations, Removed from Schema** — Tables, fields, or indexes that
-  exist in the migration DAG but have been removed from `schema.yaml`.
+  exist in the migration DAG but have been removed from `schema.star`.
   Running `morphic generate` would generate a drop for these.
 - **Field Differences** — Fields that exist in both but differ in added vs
   removed status across tables.
@@ -105,6 +105,6 @@ Shows additional detail for each change, including full descriptions.
 
 | Command | Compares | Use Case |
 |---------|----------|----------|
-| `schema-diff` | YAML schema ↔ migration DAG | See what a migration would do |
+| `schema-diff` | schema ↔ migration DAG | See what a migration would do |
 | `db-diff` | migration DAG ↔ live database | Detect drift after deployment |
-| `morphic --check` | YAML schema ↔ migration DAG | CI gate (exit code only) |
+| `morphic --check` | schema ↔ migration DAG | CI gate (exit code only) |

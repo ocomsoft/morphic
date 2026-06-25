@@ -1,10 +1,10 @@
 # db-to-schema Command
 
-The `db-to-schema` command extracts database schema information from a PostgreSQL database and generates a YAML schema file compatible with morphic. This reverse engineering tool allows you to convert existing database structures into morphic schema format.
+The `db-to-schema` command extracts database schema information from a PostgreSQL database and generates a Starlark schema file compatible with morphic. This reverse engineering tool allows you to convert existing database structures into morphic schema format.
 
 ## Overview
 
-The `db-to-schema` command connects to a PostgreSQL database, reads the INFORMATION_SCHEMA tables, and extracts complete metadata to generate a comprehensive YAML schema file. It's useful for:
+The `db-to-schema` command connects to a PostgreSQL database, reads the INFORMATION_SCHEMA tables, and extracts complete metadata to generate a comprehensive Starlark schema file. It's useful for:
 
 - Converting existing databases to morphic format
 - Reverse engineering database structures for documentation
@@ -28,7 +28,7 @@ morphic db-to-schema [flags]
 | `--username` | string | `postgres` | Database username |
 | `--password` | string | | Database password |
 | `--sslmode` | string | `disable` | SSL mode (disable, require, verify-ca, verify-full) |
-| `--output` | string | `schema.yaml` | Output YAML schema file path |
+| `--output` | string | `schema.star` | Output Starlark schema file path |
 | `--verbose` | bool | `false` | Show detailed processing information |
 
 ## Global Flags
@@ -55,7 +55,7 @@ tables:
 ### 2. Field Information
 Complete field metadata including:
 - **Name**: Column name
-- **Data Type**: Converted to morphic YAML types
+- **Data Type**: Converted to morphic schema types
 - **Length**: For VARCHAR and TEXT fields
 - **Precision/Scale**: For DECIMAL fields  
 - **Nullable**: Whether the field accepts NULL values
@@ -105,9 +105,9 @@ indexes:
 ```
 
 ### 5. Default Values
-Intelligent conversion of SQL defaults to YAML format:
+Intelligent conversion of SQL defaults to schema format:
 
-| SQL Default | YAML Default | Description |
+| SQL Default | Schema Default | Description |
 |-------------|--------------|-------------|
 | `CURRENT_TIMESTAMP` | `now` | Current timestamp |
 | `CURRENT_DATE` | `today` | Current date |
@@ -126,7 +126,7 @@ Intelligent conversion of SQL defaults to YAML format:
 morphic db-to-schema --database=myapp --username=myuser --password=mypass
 
 # Output
-Database schema successfully extracted to: schema.yaml
+Database schema successfully extracted to: schema.star
 
 Extracted 5 tables:
   - users
@@ -145,10 +145,10 @@ You can now use this schema file with other morphic commands.
 morphic db-to-schema --verbose --database=myapp --username=myuser
 
 # Output
-Extracting database schema to YAML
-==================================
+Extracting database schema to Starlark
+======================================
 Database type: postgresql
-Output file: schema.yaml
+Output file: schema.star
 
 1. Connecting to database...
 Successfully extracted schema with 5 tables
@@ -158,20 +158,20 @@ Successfully extracted schema with 5 tables
   - orders: 7 fields, 2 indexes
   - order_items: 5 fields, 2 indexes
 
-2. Converting to YAML format...
+2. Converting to Starlark format...
 
-3. Writing YAML schema file...
-Database schema successfully extracted to: schema.yaml
+3. Writing Starlark schema file...
+Database schema successfully extracted to: schema.star
 ```
 
 ### Custom Output Location
 
 ```bash
 # Extract to specific file
-morphic db-to-schema --output=extracted_schema.yaml --database=myapp
+morphic db-to-schema --output=extracted_schema.star --database=myapp
 
 # Extract to directory
-morphic db-to-schema --output=schemas/production.yaml --database=prod_db
+morphic db-to-schema --output=schemas/production.star --database=prod_db
 ```
 
 ### Remote Database Connection
@@ -185,7 +185,7 @@ morphic db-to-schema \
   --username=readonly \
   --password=secretpass \
   --sslmode=require \
-  --output=production_schema.yaml
+  --output=production_schema.star
 ```
 
 ### Using Environment Variables
@@ -219,9 +219,9 @@ morphic db-to-schema --verbose
 - 🔄 SQL Server - Placeholder implementation
 - 🔄 Oracle - Planned for future release
 
-## Generated YAML Structure
+## Generated Starlark Structure
 
-The command generates a complete YAML schema file:
+The command generates a complete Starlark schema file (note: the example below shows the logical structure; the actual output is in Starlark format):
 
 ```yaml
 database:
@@ -307,10 +307,10 @@ tables:
 
 ## Type Mapping
 
-### PostgreSQL to YAML Type Conversion
+### PostgreSQL to Schema Type Conversion
 
-| PostgreSQL Type | YAML Type | Notes |
-|-----------------|-----------|-------|
+| PostgreSQL Type | Schema Type | Notes |
+|-----------------|-------------|-------|
 | `VARCHAR(n)` | `varchar` | Length preserved |
 | `TEXT` | `text` | |
 | `INTEGER` | `integer` | |
@@ -339,7 +339,7 @@ CREATE TABLE products (
 ```
 
 ```yaml
-# Generated YAML
+# Generated schema (shown in YAML-like notation; actual output is Starlark)
 - name: id
   type: serial
   primary_key: true
@@ -445,13 +445,13 @@ failed to query tables: pq: permission denied for schema information_schema
 
 ```bash
 # 1. Extract existing database schema
-morphic db-to-schema --database=production --output=baseline_schema.yaml
+morphic db-to-schema --database=production --output=baseline_schema.star
 
 # 2. Initialize migrations directory with extracted schema
-morphic init --schema=baseline_schema.yaml
+morphic init --schema=baseline_schema.star
 
 # 3. Make schema modifications
-vim schema/schema.yaml
+vim schema/schema.star
 
 # 4. Generate migration for changes
 morphic generate --name="add_new_features"
@@ -464,13 +464,13 @@ goose -dir migrations postgres $DATABASE_URL up
 
 ```bash
 # Before making changes - capture current state
-morphic db-to-schema --database=staging --output=current_state.yaml
+morphic db-to-schema --database=staging --output=current_state.star
 
-# Make schema changes in YAML
-vim schema/schema.yaml
+# Make schema changes in Starlark
+vim schema/schema.star
 
 # Compare what will change
-diff current_state.yaml schema/schema.yaml
+diff current_state.star schema/schema.star
 
 # Generate and review migration
 morphic generate --dry-run
@@ -533,13 +533,13 @@ morphic db-to-schema \
   --host=legacy-db.company.com \
   --database=legacy_system \
   --username=readonly \
-  --output=legacy_schema.yaml
+  --output=legacy_schema.star
 
 # Review and clean up generated schema
-vim legacy_schema.yaml
+vim legacy_schema.star
 
 # Initialize new schema-based project
-morphic init --schema=legacy_schema.yaml
+morphic init --schema=legacy_schema.star
 ```
 
 ### 2. Development Environment Setup
@@ -551,10 +551,10 @@ morphic db-to-schema \
   --database=production \
   --username=readonly \
   --sslmode=verify-full \
-  --output=prod_schema.yaml
+  --output=prod_schema.star
 
 # Use for local development
-cp prod_schema.yaml schema/schema.yaml
+cp prod_schema.star schema/schema.star
 morphic init
 ```
 
@@ -577,11 +577,11 @@ cat schema_structure.sql >> docs/database.md
 
 ```bash
 # Compare staging vs production
-morphic db-to-schema --database=staging --output=staging_schema.yaml
-morphic db-to-schema --database=production --output=prod_schema.yaml
+morphic db-to-schema --database=staging --output=staging_schema.star
+morphic db-to-schema --database=production --output=prod_schema.star
 
 # Compare schemas
-diff staging_schema.yaml prod_schema.yaml
+diff staging_schema.star prod_schema.star
 ```
 
 ### 5. CI/CD Integration
@@ -596,13 +596,13 @@ morphic db-to-schema \
   --database=$PROD_DB_NAME \
   --username=$READONLY_USER \
   --password=$READONLY_PASS \
-  --output=current_prod_schema.yaml
+  --output=current_prod_schema.star
 
 # Compare with committed schema
-if ! diff current_prod_schema.yaml schema/schema.yaml > /dev/null; then
+if ! diff current_prod_schema.star schema/schema.star > /dev/null; then
     echo "Schema drift detected between code and production!"
     echo "Differences:"
-    diff current_prod_schema.yaml schema/schema.yaml
+    diff current_prod_schema.star schema/schema.star
     exit 1
 fi
 ```
@@ -613,10 +613,10 @@ fi
 
 ```bash
 # Override extracted database name
-morphic db-to-schema --database=myapp --output=temp_schema.yaml
+morphic db-to-schema --database=myapp --output=temp_schema.star
 
 # Edit the database section
-sed -i 's/extracted_schema/myapp_v2/g' temp_schema.yaml
+sed -i 's/extracted_schema/myapp_v2/g' temp_schema.star
 ```
 
 ### Selective Table Extraction (Future Feature)
@@ -639,7 +639,7 @@ sed -i 's/extracted_schema/myapp_v2/g' temp_schema.yaml
 
 ```bash
 # 1. Extract Django database
-morphic db-to-schema --database=django_app --output=django_schema.yaml
+morphic db-to-schema --database=django_app --output=django_schema.star
 
 # 2. Convert Django-specific types (manual review needed)
 # - Review auto_now and auto_now_add fields
@@ -647,14 +647,14 @@ morphic db-to-schema --database=django_app --output=django_schema.yaml
 # - Verify foreign key on_delete behaviors
 
 # 3. Initialize morphic
-morphic init --schema=django_schema.yaml
+morphic init --schema=django_schema.star
 ```
 
 ### From Rails to Morphic  
 
 ```bash
 # 1. Extract Rails database
-morphic db-to-schema --database=rails_app --output=rails_schema.yaml
+morphic db-to-schema --database=rails_app --output=rails_schema.star
 
 # 2. Review Rails conventions
 # - Convert created_at/updated_at to auto_create/auto_update
@@ -662,14 +662,14 @@ morphic db-to-schema --database=rails_app --output=rails_schema.yaml
 # - Check index naming conventions
 
 # 3. Initialize morphic
-morphic init --schema=rails_schema.yaml
+morphic init --schema=rails_schema.star
 ```
 
 ### From Liquibase to Morphic
 
 ```bash
 # 1. Extract current database state
-morphic db-to-schema --database=liquibase_db --output=current_schema.yaml
+morphic db-to-schema --database=liquibase_db --output=current_schema.star
 
 # 2. Clean up and organize
 # - Remove Liquibase system tables from extracted schema
@@ -677,7 +677,7 @@ morphic db-to-schema --database=liquibase_db --output=current_schema.yaml
 # - Standardize naming conventions
 
 # 3. Initialize clean migration history
-morphic init --schema=current_schema.yaml
+morphic init --schema=current_schema.star
 ```
 
 ## Limitations and Considerations
@@ -686,7 +686,7 @@ morphic init --schema=current_schema.yaml
 
 1. **Schema Scope**: Only extracts from `public` schema
 2. **PostgreSQL Only**: Full support limited to PostgreSQL currently  
-3. **Basic Types**: Complex types may map to simpler YAML equivalents
+3. **Basic Types**: Complex types may map to simpler schema equivalents
 4. **Views**: Database views are not extracted
 5. **Procedures**: Stored procedures and functions not included
 6. **Triggers**: Database triggers not extracted
@@ -694,7 +694,7 @@ morphic init --schema=current_schema.yaml
 
 ### Data Type Considerations
 
-Some PostgreSQL types have no direct YAML equivalent:
+Some PostgreSQL types have no direct schema equivalent:
 - Arrays → converted to text
 - Custom types → converted to text
 - Geometric types → converted to text
@@ -711,5 +711,5 @@ Some PostgreSQL types have no direct YAML equivalent:
 - [init Command](./init.md) - Initialize new projects with extracted schemas
 - [morphic Command](./morphic.md) - Generate migrations from schemas  
 - [schema-to-sql Command](./schema_to_sql.md) - View generated SQL from extracted schemas
-- [Schema Format Guide](../schema-format.md) - YAML schema syntax reference
+- [Schema Format Guide](../schema-format.md) - Starlark schema syntax reference
 - [Configuration Guide](../configuration.md) - Configuration options

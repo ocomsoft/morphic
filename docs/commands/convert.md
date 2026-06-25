@@ -1,15 +1,15 @@
-# convert Command
+# from-makemigrations Command
 
-The `convert` command converts existing Go (Yaegi) migration files to Starlark (`.star`) format. This is a one-time migration tool for projects adopting the Starlark migration format.
+The `from-makemigrations` command converts existing Go (Yaegi) migration files to Starlark (`.star`) format. This is a one-time migration tool for projects adopting the Starlark migration format from the old makemigrations format.
 
 ## Overview
 
-The command loads each `.go` migration file via the Yaegi interpreter, extracts its operations (create table, add field, alter field, etc.), and emits an equivalent `.star` file using the Starlark DSL. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
+The command loads each `.go` migration file, extracts its operations (create table, add field, alter field, etc.), and emits an equivalent `.star` file using the Starlark DSL. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
 
 ## Usage
 
 ```bash
-morphic convert <migrations-dir> -o <output-dir>
+morphic from-makemigrations <migrations-dir> -o <output-dir>
 ```
 
 ## Arguments
@@ -29,13 +29,13 @@ morphic convert <migrations-dir> -o <output-dir>
 Convert all Go migrations to Starlark:
 
 ```bash
-morphic convert migrations/ -o migrations_starlark/
+morphic from-makemigrations migrations/ -o migrations_starlark/
 ```
 
 Convert and overwrite in place (replace Go format with Starlark):
 
 ```bash
-morphic convert migrations/ -o migrations_new/
+morphic from-makemigrations migrations/ -o migrations_new/
 # Review the output, then:
 rm migrations/*.go
 mv migrations_new/*.star migrations/
@@ -43,7 +43,7 @@ mv migrations_new/*.star migrations/
 
 ## How It Works
 
-1. **Load** — all `.go` files in the migrations directory are loaded via Yaegi. Each file's `init()` runs, registering its `Migration` into a registry.
+1. **Load** — all `.go` files in the migrations directory are loaded and each `Migration` is registered into a registry.
 2. **Convert** — each `*migrate.Migration` is serialized to Starlark syntax using typed field builtins (`uuid()`, `varchar()`, `timestamp()`, etc.) and positional arguments for concise output.
 3. **Write** — each `.star` file is written to the output directory, named `<migration-name>.star`.
 

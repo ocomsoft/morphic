@@ -35,8 +35,7 @@ import (
 )
 
 var (
-	cfgFile    string
-	configFile string // Config file path
+	cfgFile string
 	verbose    bool
 )
 
@@ -80,7 +79,7 @@ func init() {
 	)
 
 	// Global flag for config file
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "Config file path (default: migrations/morphic.config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "Config file path (default: migrations/morphic.config.yaml)")
 }
 
 // initConfig reads in config file and ENV variables if set.

@@ -117,7 +117,7 @@ func runDB2Schema(cmd *cobra.Command, args []string) error {
 	var err error
 
 	// Load config to get database type if not provided via flags
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 
 	// Determine database type - use config if available, otherwise default to PostgreSQL
 	if cfg.Database.Type != "" {

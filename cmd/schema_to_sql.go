@@ -74,7 +74,7 @@ func runDumpSQL(cmd *cobra.Command, args []string) error {
 			return schemaStateToYAMLSchema(dagOut.SchemaState, dbType), nil
 		},
 	}
-	return workflow.ExecuteDumpSQL(cmd, databaseType, pending, verbose, configFile, dagQuerier)
+	return workflow.ExecuteDumpSQL(cmd, databaseType, pending, verbose, cfgFile, dagQuerier)
 }
 
 func init() {

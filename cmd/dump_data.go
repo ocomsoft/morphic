@@ -118,7 +118,7 @@ func init() {
 // runDumpData generates a dump-data migration by fetching rows from a live
 // database and wrapping them in UpsertData operations.
 func runDumpData(_ *cobra.Command, args []string) error {
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	// Determine DB type from config, default to postgresql.

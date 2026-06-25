@@ -65,7 +65,7 @@ func init() {
 // runCurrentState queries the migration DAG, reconstructs the schema, and
 // prints it as YAML to stdout.
 func runCurrentState(_ *cobra.Command, _ []string) error {
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))

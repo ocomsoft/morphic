@@ -55,7 +55,7 @@ supports are available:
 	DisableFlagParsing: true,
 	SilenceErrors:      true,
 	RunE: func(_ *cobra.Command, args []string) error {
-		cfg := config.LoadOrDefault(configFile)
+		cfg := config.LoadOrDefault(cfgFile)
 		return ExecuteMigrate(cfg.Migration.Directory, cfg.Database.DefaultURL, args)
 	},
 }

@@ -97,7 +97,7 @@ func runFindIncludes(cmd *cobra.Command, args []string) error {
 			return updateSchemaWithIncludes(path, schema, schemasToAdd)
 		},
 	}
-	return workflow.ExecuteFindIncludes(cmd, configFile, schemaPath, interactive, includeWorkspace, callbacks)
+	return workflow.ExecuteFindIncludes(cmd, cfgFile, schemaPath, interactive, includeWorkspace, callbacks)
 }
 
 // discoverSchemas finds all YAML schemas in Go modules and workspace

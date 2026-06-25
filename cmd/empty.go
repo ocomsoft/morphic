@@ -73,7 +73,7 @@ func init() {
 // directory. It queries the existing DAG to determine the correct dependency
 // list so the blank migration slots into the chain correctly.
 func runEmpty(_ *cobra.Command, _ []string) error {
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	gen := newGenerator(cfg)

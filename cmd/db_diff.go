@@ -98,7 +98,7 @@ Examples:
 // compiled migrations and the live database schema, then comparing them.
 func runDBDiff(cmd *cobra.Command) error {
 	// Load config to determine the migrations directory
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	// Parse the database type from the --db-type flag

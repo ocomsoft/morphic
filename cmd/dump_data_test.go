@@ -45,7 +45,7 @@ func resetDumpDataFlags() {
 	dumpDataConflictKey = nil
 	dumpDataDSN = ""
 	dumpDataWhere = nil
-	configFile = ""
+	cfgFile = ""
 	// Reset shared DB connection vars (declared in db2schema.go)
 	host = ""
 	port = 0

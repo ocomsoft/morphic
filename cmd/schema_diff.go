@@ -70,7 +70,7 @@ func init() {
 }
 
 func runDiff(_ *cobra.Command, _ []string) error {
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	// 1. Query existing DAG for previous schema state

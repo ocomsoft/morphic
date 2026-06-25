@@ -104,7 +104,7 @@ func init() {
 //  4. Diff the reconstructed state against the current schema
 //  5. Generate a new .go migration file (or merge migration if --merge is set)
 func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
 	// Override format from --format flag if provided.
@@ -559,7 +559,7 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
-	cfg := config.LoadOrDefault(configFile)
+	cfg := config.LoadOrDefault(cfgFile)
 	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {

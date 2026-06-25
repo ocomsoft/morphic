@@ -261,7 +261,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// Build CREATE TABLE statement
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range allDefs {
 		sql.WriteString("    " + def)
@@ -506,7 +506,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	// MERGE INTO [table] AS target
-	sb.WriteString(fmt.Sprintf("MERGE INTO %s AS target\n", p.QuoteName(table)))
+	fmt.Fprintf(&sb, "MERGE INTO %s AS target\n", p.QuoteName(table))
 
 	// USING (VALUES (...), (...)) AS source ([col1], [col2])
 	sb.WriteString("USING (VALUES ")
@@ -514,9 +514,9 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(fmt.Sprintf("(%s)", strings.Join(row, ", ")))
+		fmt.Fprintf(&sb, "(%s)", strings.Join(row, ", "))
 	}
-	sb.WriteString(fmt.Sprintf(") AS source (%s)\n", strings.Join(quotedCols, ", ")))
+	fmt.Fprintf(&sb, ") AS source (%s)\n", strings.Join(quotedCols, ", "))
 
 	// ON target.[k1] = source.[k1] AND ...
 	var onClauses []string
@@ -524,7 +524,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 		qk := p.QuoteName(k)
 		onClauses = append(onClauses, fmt.Sprintf("target.%s = source.%s", qk, qk))
 	}
-	sb.WriteString(fmt.Sprintf("ON %s\n", strings.Join(onClauses, " AND ")))
+	fmt.Fprintf(&sb, "ON %s\n", strings.Join(onClauses, " AND "))
 
 	// Determine non-conflict columns
 	conflictSet := make(map[string]bool, len(conflictKeys))
@@ -547,7 +547,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(fmt.Sprintf("target.%s = source.%s", qc, qc))
+			fmt.Fprintf(&sb, "target.%s = source.%s", qc, qc)
 		}
 		sb.WriteString("\n")
 	}
@@ -557,8 +557,8 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	for _, c := range columns {
 		sourceCols = append(sourceCols, fmt.Sprintf("source.%s", p.QuoteName(c)))
 	}
-	sb.WriteString(fmt.Sprintf("WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s);",
-		strings.Join(quotedCols, ", "), strings.Join(sourceCols, ", ")))
+	fmt.Fprintf(&sb, "WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s);",
+		strings.Join(quotedCols, ", "), strings.Join(sourceCols, ", "))
 
 	return sb.String()
 }

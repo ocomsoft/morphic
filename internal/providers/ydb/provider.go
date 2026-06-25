@@ -239,7 +239,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 	}
 
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range fieldDefs {
 		sql.WriteString("    " + def)
@@ -251,7 +251,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// YDB requires primary key
 	if len(primaryKeys) > 0 {
-		sql.WriteString(fmt.Sprintf(",\n    PRIMARY KEY (%s)\n", strings.Join(primaryKeys, ", ")))
+		fmt.Fprintf(&sql, ",\n    PRIMARY KEY (%s)\n", strings.Join(primaryKeys, ", "))
 	} else {
 		sql.WriteString("\n")
 	}
@@ -394,13 +394,13 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 		quotedCols[i] = p.QuoteName(c)
 	}
 
-	sb.WriteString(fmt.Sprintf("UPSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", ")))
+	fmt.Fprintf(&sb, "UPSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", "))
 
 	for i, row := range valueLiterals {
 		if i == 0 {
-			sb.WriteString(fmt.Sprintf("VALUES (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, "VALUES (%s)", strings.Join(row, ", "))
 		} else {
-			sb.WriteString(fmt.Sprintf(",\n       (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, ",\n       (%s)", strings.Join(row, ", "))
 		}
 	}
 	sb.WriteString(";")

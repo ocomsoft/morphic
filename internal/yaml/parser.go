@@ -326,15 +326,15 @@ func (p *Parser) FormatValidationErrors(errors []ValidationError) string {
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Schema validation failed with %d error(s):\n", len(errors)))
+	fmt.Fprintf(&result, "Schema validation failed with %d error(s):\n", len(errors))
 
 	for i, err := range errors {
-		result.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, strings.ToUpper(err.Type), err.Message))
+		fmt.Fprintf(&result, "  %d. [%s] %s\n", i+1, strings.ToUpper(err.Type), err.Message)
 		if err.Table != "" {
-			result.WriteString(fmt.Sprintf("     Table: %s\n", err.Table))
+			fmt.Fprintf(&result, "     Table: %s\n", err.Table)
 		}
 		if err.Field != "" {
-			result.WriteString(fmt.Sprintf("     Field: %s\n", err.Field))
+			fmt.Fprintf(&result, "     Field: %s\n", err.Field)
 		}
 	}
 

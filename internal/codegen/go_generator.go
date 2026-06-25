@@ -88,7 +88,7 @@ func (g *GoGenerator) GenerateMigration(
 	// init() function
 	b.WriteString("func init() {\n")
 	b.WriteString("\tm.Register(&m.Migration{\n")
-	b.WriteString(fmt.Sprintf("\t\tName: %q,\n", name))
+	fmt.Fprintf(&b, "\t\tName: %q,\n", name)
 
 	// Dependencies
 	b.WriteString("\t\tDependencies: []string{")
@@ -184,7 +184,7 @@ func (g *GoGenerator) generateCreateTable(change yaml.Change, schema *yaml.Schem
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\t\t\t&m.CreateTable{\n\t\t\t\tName: %q,\n", table.Name))
+	fmt.Fprintf(&b, "\t\t\t&m.CreateTable{\n\t\t\t\tName: %q,\n", table.Name)
 
 	// Fields
 	if len(table.Fields) > 0 {
@@ -254,7 +254,7 @@ func (g *GoGenerator) generateAddField(change yaml.Change, schema *yaml.Schema, 
 		return "", fmt.Errorf("expected yaml.Field for NewValue, got %T", change.NewValue)
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\t\t\t&m.AddField{\n\t\t\t\tTable: %q,\n", change.TableName))
+	fmt.Fprintf(&b, "\t\t\t&m.AddField{\n\t\t\t\tTable: %q,\n", change.TableName)
 	b.WriteString("\t\t\t\tField: ")
 	b.WriteString(generateFieldLiteral(field))
 	b.WriteString(",\n")
@@ -321,7 +321,7 @@ func (g *GoGenerator) generateAlterField(
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\t\t\t&m.AlterField{\n\t\t\t\tTable: %q,\n", change.TableName))
+	fmt.Fprintf(&b, "\t\t\t&m.AlterField{\n\t\t\t\tTable: %q,\n", change.TableName)
 	b.WriteString("\t\t\t\tOldField: ")
 	b.WriteString(generateFieldLiteral(*oldField))
 	b.WriteString(",\n\t\t\t\tNewField: ")
@@ -364,7 +364,7 @@ func (g *GoGenerator) generateAddIndex(change yaml.Change) (string, error) {
 		return "", fmt.Errorf("expected yaml.Index for NewValue, got %T", change.NewValue)
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\t\t\t&m.AddIndex{\n\t\t\t\tTable: %q,\n", change.TableName))
+	fmt.Fprintf(&b, "\t\t\t&m.AddIndex{\n\t\t\t\tTable: %q,\n", change.TableName)
 	b.WriteString("\t\t\t\tIndex: ")
 	b.WriteString(generateIndexLiteral(idx))
 	b.WriteString(",\n\t\t\t},\n")
@@ -400,13 +400,13 @@ func (g *GoGenerator) generateAddForeignKey(change yaml.Change) (string, error) 
 	}
 	var b strings.Builder
 	b.WriteString("\t\t\t&m.AddForeignKey{\n")
-	b.WriteString(fmt.Sprintf("\t\t\t\tTable: %q,\n", change.TableName))
-	b.WriteString(fmt.Sprintf("\t\t\t\tFieldName: %q,\n", change.FieldName))
-	b.WriteString(fmt.Sprintf("\t\t\t\tConstraintName: %q,\n", constraintName))
-	b.WriteString(fmt.Sprintf("\t\t\t\tReferencedTable: %q,\n", field.ForeignKey.Table))
-	b.WriteString(fmt.Sprintf("\t\t\t\tOnDelete: %q,\n", onDelete))
+	fmt.Fprintf(&b, "\t\t\t\tTable: %q,\n", change.TableName)
+	fmt.Fprintf(&b, "\t\t\t\tFieldName: %q,\n", change.FieldName)
+	fmt.Fprintf(&b, "\t\t\t\tConstraintName: %q,\n", constraintName)
+	fmt.Fprintf(&b, "\t\t\t\tReferencedTable: %q,\n", field.ForeignKey.Table)
+	fmt.Fprintf(&b, "\t\t\t\tOnDelete: %q,\n", onDelete)
 	if field.ForeignKey.OnUpdate != "" {
-		b.WriteString(fmt.Sprintf("\t\t\t\tOnUpdate: %q,\n", field.ForeignKey.OnUpdate))
+		fmt.Fprintf(&b, "\t\t\t\tOnUpdate: %q,\n", field.ForeignKey.OnUpdate)
 	}
 	b.WriteString("\t\t\t\tIgnoreErrors:    true,\n")
 	b.WriteString("\t\t\t},\n")
@@ -435,7 +435,7 @@ func (g *GoGenerator) generateSetDefaults(change yaml.Change) (string, error) {
 	var b strings.Builder
 	b.WriteString("\t\t\t&m.SetDefaults{\n\t\t\t\tDefaults: map[string]string{\n")
 	for _, k := range sortedMapKeys(defaults) {
-		b.WriteString(fmt.Sprintf("\t\t\t\t\t%q: %q,\n", k, defaults[k]))
+		fmt.Fprintf(&b, "\t\t\t\t\t%q: %q,\n", k, defaults[k])
 	}
 	b.WriteString("\t\t\t\t},\n\t\t\t},\n")
 	return b.String(), nil
@@ -605,10 +605,10 @@ func (g *GoGenerator) GenerateGoMod(moduleName, version, goVersion string) strin
 		goVersion = "1.24"
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("module %s\n\n", moduleName))
-	b.WriteString(fmt.Sprintf("go %s\n\n", goVersion))
+	fmt.Fprintf(&b, "module %s\n\n", moduleName)
+	fmt.Fprintf(&b, "go %s\n\n", goVersion)
 	b.WriteString("require (\n")
-	b.WriteString(fmt.Sprintf("\tgithub.com/ocomsoft/morphic %s\n", version))
+	fmt.Fprintf(&b, "\tgithub.com/ocomsoft/morphic %s\n", version)
 	b.WriteString(")\n")
 	return b.String()
 }

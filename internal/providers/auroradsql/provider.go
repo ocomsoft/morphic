@@ -251,7 +251,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 	allDefs := append(fieldDefs, constraints...)
 
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range allDefs {
 		sql.WriteString("    " + def)

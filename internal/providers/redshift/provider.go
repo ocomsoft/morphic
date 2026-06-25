@@ -258,7 +258,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// Build CREATE TABLE statement
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range allDefs {
 		sql.WriteString("    " + def)
@@ -503,8 +503,8 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 			for _, row := range valueLiterals {
 				vals = append(vals, row[idx])
 			}
-			sb.WriteString(fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s);\n",
-				quotedTable, p.QuoteName(conflictKeys[0]), strings.Join(vals, ", ")))
+			fmt.Fprintf(&sb, "DELETE FROM %s WHERE %s IN (%s);\n",
+				quotedTable, p.QuoteName(conflictKeys[0]), strings.Join(vals, ", "))
 		} else {
 			// Multiple keys: DELETE FROM "table" WHERE ("k1", "k2") IN ((v1a, v2a), (v1b, v2b))
 			quotedConflict := make([]string, len(conflictKeys))
@@ -520,18 +520,18 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 				}
 				tuples = append(tuples, fmt.Sprintf("(%s)", strings.Join(vals, ", ")))
 			}
-			sb.WriteString(fmt.Sprintf("DELETE FROM %s WHERE (%s) IN (%s);\n",
-				quotedTable, strings.Join(quotedConflict, ", "), strings.Join(tuples, ", ")))
+			fmt.Fprintf(&sb, "DELETE FROM %s WHERE (%s) IN (%s);\n",
+				quotedTable, strings.Join(quotedConflict, ", "), strings.Join(tuples, ", "))
 		}
 	}
 
 	// INSERT portion
-	sb.WriteString(fmt.Sprintf("INSERT INTO %s (%s)\n", quotedTable, strings.Join(quotedCols, ", ")))
+	fmt.Fprintf(&sb, "INSERT INTO %s (%s)\n", quotedTable, strings.Join(quotedCols, ", "))
 	for i, row := range valueLiterals {
 		if i == 0 {
-			sb.WriteString(fmt.Sprintf("VALUES (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, "VALUES (%s)", strings.Join(row, ", "))
 		} else {
-			sb.WriteString(fmt.Sprintf(",\n       (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, ",\n       (%s)", strings.Join(row, ", "))
 		}
 	}
 	sb.WriteString(";")

@@ -189,9 +189,9 @@ func generateMarkdownDocumentation(schema *types.Schema) (string, error) {
 
 	// Header
 	md.WriteString("# Database Schema Documentation\n\n")
-	md.WriteString(fmt.Sprintf("**Database:** %s  \n", schema.Database.Name))
-	md.WriteString(fmt.Sprintf("**Version:** %s  \n", schema.Database.Version))
-	md.WriteString(fmt.Sprintf("**Generated:** %s  \n\n", time.Now().Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&md, "**Database:** %s  \n", schema.Database.Name)
+	fmt.Fprintf(&md, "**Version:** %s  \n", schema.Database.Version)
+	fmt.Fprintf(&md, "**Generated:** %s  \n\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	// Table of Contents
 	md.WriteString("## Table of Contents\n\n")
@@ -207,8 +207,8 @@ func generateMarkdownDocumentation(schema *types.Schema) (string, error) {
 	})
 
 	for _, table := range sortedTables {
-		md.WriteString(fmt.Sprintf("  - [%s Table](#%s-table)\n",
-			cases.Title(language.Und).String(table.Name), strings.ToLower(strings.ReplaceAll(table.Name, "_", "-"))))
+		fmt.Fprintf(&md, "  - [%s Table](#%s-table)\n",
+			cases.Title(language.Und).String(table.Name), strings.ToLower(strings.ReplaceAll(table.Name, "_", "-")))
 	}
 	md.WriteString("- [Indexes and Constraints](#indexes-and-constraints)\n")
 	md.WriteString("- [Relationships](#relationships)\n\n")

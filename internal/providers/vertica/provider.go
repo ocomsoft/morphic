@@ -257,7 +257,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// Build CREATE TABLE statement
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range allDefs {
 		sql.WriteString("    " + def)
@@ -496,7 +496,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	// MERGE INTO "table"
-	sb.WriteString(fmt.Sprintf("MERGE INTO %s\n", quotedTable))
+	fmt.Fprintf(&sb, "MERGE INTO %s\n", quotedTable)
 
 	// USING (SELECT ... UNION ALL SELECT ...) AS source
 	sb.WriteString("USING (")
@@ -512,7 +512,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 			sb.WriteString(val)
 			// First row gets AS "colname" aliases
 			if i == 0 {
-				sb.WriteString(fmt.Sprintf(" AS %s", quotedCols[j]))
+				fmt.Fprintf(&sb, " AS %s", quotedCols[j])
 			}
 		}
 	}
@@ -524,7 +524,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 		qk := p.QuoteName(k)
 		onClauses = append(onClauses, fmt.Sprintf("%s.%s = source.%s", quotedTable, qk, qk))
 	}
-	sb.WriteString(fmt.Sprintf("ON %s\n", strings.Join(onClauses, " AND ")))
+	fmt.Fprintf(&sb, "ON %s\n", strings.Join(onClauses, " AND "))
 
 	// Determine non-conflict columns
 	conflictSet := make(map[string]bool, len(conflictKeys))
@@ -547,7 +547,7 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(fmt.Sprintf("%s = source.%s", qc, qc))
+			fmt.Fprintf(&sb, "%s = source.%s", qc, qc)
 		}
 		sb.WriteString("\n")
 	}
@@ -557,8 +557,8 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	for _, c := range columns {
 		sourceCols = append(sourceCols, fmt.Sprintf("source.%s", p.QuoteName(c)))
 	}
-	sb.WriteString(fmt.Sprintf("WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s);",
-		strings.Join(quotedCols, ", "), strings.Join(sourceCols, ", ")))
+	fmt.Fprintf(&sb, "WHEN NOT MATCHED THEN INSERT (%s) VALUES (%s);",
+		strings.Join(quotedCols, ", "), strings.Join(sourceCols, ", "))
 
 	return sb.String()
 }

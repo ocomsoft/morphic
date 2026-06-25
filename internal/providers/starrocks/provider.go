@@ -254,7 +254,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 	}
 
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range fieldDefs {
 		sql.WriteString("    " + def)
@@ -268,29 +268,29 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// StarRocks requires ENGINE and key specification
 	if len(primaryKeys) > 0 {
-		sql.WriteString(fmt.Sprintf("\nPRIMARY KEY (%s)", strings.Join(primaryKeys, ", ")))
+		fmt.Fprintf(&sql, "\nPRIMARY KEY (%s)", strings.Join(primaryKeys, ", "))
 	}
 
 	// Default to OLAP engine with DUPLICATE KEY model
 	sql.WriteString("\nENGINE=OLAP\nDUPLICATE KEY")
 
 	if len(primaryKeys) > 0 {
-		sql.WriteString(fmt.Sprintf("(%s)", strings.Join(primaryKeys, ", ")))
+		fmt.Fprintf(&sql, "(%s)", strings.Join(primaryKeys, ", "))
 	} else {
 		// Use first column as duplicate key if no primary key
 		if len(fieldDefs) > 0 {
 			// Extract first field name
 			firstField := strings.Fields(fieldDefs[0])[0]
-			sql.WriteString(fmt.Sprintf("(%s)", firstField))
+			fmt.Fprintf(&sql, "(%s)", firstField)
 		}
 	}
 
 	sql.WriteString("\nDISTRIBUTED BY HASH")
 	if len(primaryKeys) > 0 {
-		sql.WriteString(fmt.Sprintf("(%s)", strings.Join(primaryKeys, ", ")))
+		fmt.Fprintf(&sql, "(%s)", strings.Join(primaryKeys, ", "))
 	} else if len(fieldDefs) > 0 {
 		firstField := strings.Fields(fieldDefs[0])[0]
-		sql.WriteString(fmt.Sprintf("(%s)", firstField))
+		fmt.Fprintf(&sql, "(%s)", firstField)
 	}
 
 	sql.WriteString("\nPROPERTIES (\n    \"replication_num\" = \"1\"\n);")

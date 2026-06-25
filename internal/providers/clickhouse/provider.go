@@ -253,7 +253,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 
 	// Build CREATE TABLE statement
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range fieldDefs {
 		sql.WriteString("    " + def)
@@ -268,7 +268,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 	// ClickHouse requires an ENGINE clause
 	// Default to MergeTree with primary key if available, otherwise use Log
 	if len(primaryKeys) > 0 {
-		sql.WriteString(fmt.Sprintf("\nENGINE = MergeTree()\nPRIMARY KEY (%s)", strings.Join(primaryKeys, ", ")))
+		fmt.Fprintf(&sql, "\nENGINE = MergeTree()\nPRIMARY KEY (%s)", strings.Join(primaryKeys, ", "))
 	} else {
 		sql.WriteString("\nENGINE = Log()")
 	}
@@ -437,13 +437,13 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	sb.WriteString("-- Note: ClickHouse deduplication is handled by the table engine (e.g. ReplacingMergeTree)\n")
-	sb.WriteString(fmt.Sprintf("INSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", ")))
+	fmt.Fprintf(&sb, "INSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", "))
 
 	for i, row := range valueLiterals {
 		if i == 0 {
-			sb.WriteString(fmt.Sprintf("VALUES (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, "VALUES (%s)", strings.Join(row, ", "))
 		} else {
-			sb.WriteString(fmt.Sprintf(",\n       (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, ",\n       (%s)", strings.Join(row, ", "))
 		}
 	}
 	sb.WriteString(";")

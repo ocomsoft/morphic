@@ -100,8 +100,8 @@ func RenderDAGASCII(out *DAGOutput) string {
 		render(root, "", true)
 	}
 
-	sb.WriteString(fmt.Sprintf("\nRoots:  %s\n", strings.Join(out.Roots, ", ")))
-	sb.WriteString(fmt.Sprintf("Leaves: %s\n", strings.Join(out.Leaves, ", ")))
+	fmt.Fprintf(&sb, "\nRoots:  %s\n", strings.Join(out.Roots, ", "))
+	fmt.Fprintf(&sb, "Leaves: %s\n", strings.Join(out.Leaves, ", "))
 	if out.HasBranches {
 		sb.WriteString("WARNING: Branches detected -- run morphic generate --merge\n")
 	} else {

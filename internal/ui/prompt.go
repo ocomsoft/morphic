@@ -172,7 +172,7 @@ func (m promptModel) View() string {
 			cursor = selectedStyle.Render("> ")
 			label = selectedStyle.Render(label)
 		}
-		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, label, desc))
+		fmt.Fprintf(&b, "%s%s %s\n", cursor, label, desc)
 	}
 
 	// Exit choice doesn't support scope

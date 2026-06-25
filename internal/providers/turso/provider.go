@@ -237,7 +237,7 @@ func (p *Provider) GenerateCreateTable(schema *types.Schema, table *types.Table)
 	}
 
 	var sql strings.Builder
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", p.QuoteName(table.Name)))
+	fmt.Fprintf(&sql, "CREATE TABLE %s (\n", p.QuoteName(table.Name))
 
 	for i, def := range fieldDefs {
 		sql.WriteString("    " + def)
@@ -424,14 +424,14 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	// INSERT INTO "table" ("col1", "col2")
-	sb.WriteString(fmt.Sprintf("INSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", ")))
+	fmt.Fprintf(&sb, "INSERT INTO %s (%s)\n", p.QuoteName(table), strings.Join(quotedCols, ", "))
 
 	// VALUES rows
 	for i, row := range valueLiterals {
 		if i == 0 {
-			sb.WriteString(fmt.Sprintf("VALUES (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, "VALUES (%s)", strings.Join(row, ", "))
 		} else {
-			sb.WriteString(fmt.Sprintf(",\n       (%s)", strings.Join(row, ", ")))
+			fmt.Fprintf(&sb, ",\n       (%s)", strings.Join(row, ", "))
 		}
 	}
 
@@ -456,11 +456,11 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 
 	if len(updateCols) == 0 {
 		// All columns are conflict keys — use DO NOTHING
-		sb.WriteString(fmt.Sprintf("\nON CONFLICT(%s) DO NOTHING;", strings.Join(quotedConflict, ", ")))
+		fmt.Fprintf(&sb, "\nON CONFLICT(%s) DO NOTHING;", strings.Join(quotedConflict, ", "))
 	} else {
-		sb.WriteString(fmt.Sprintf("\nON CONFLICT(%s) DO UPDATE SET\n", strings.Join(quotedConflict, ", ")))
+		fmt.Fprintf(&sb, "\nON CONFLICT(%s) DO UPDATE SET\n", strings.Join(quotedConflict, ", "))
 		for i, c := range updateCols {
-			sb.WriteString(fmt.Sprintf("  %s = excluded.%s", p.QuoteName(c), p.QuoteName(c)))
+			fmt.Fprintf(&sb, "  %s = excluded.%s", p.QuoteName(c), p.QuoteName(c))
 			if i < len(updateCols)-1 {
 				sb.WriteString(",\n")
 			}

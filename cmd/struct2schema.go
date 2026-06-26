@@ -45,11 +45,11 @@ var struct2schemaCmd = &cobra.Command{
 	Use:     "struct-to-schema",
 	Aliases: []string{"struct2schema"},
 	GroupID: "convert",
-	Short:   "Convert Go structs to YAML schema format",
-	Long: `Convert Go structs to YAML schema format compatible with morphic.
+	Short:   "Convert Go structs to Starlark schema format",
+	Long: `Convert Go structs to Starlark schema format compatible with morphic.
 
 This command scans Go source files in a directory, extracts struct definitions,
-and generates a YAML schema file that can be used with morphic.
+and generates a Starlark schema file that can be used with morphic.
 
 Features:
 - Recursive directory scanning with smart exclusions (.git, vendor, etc.)
@@ -61,11 +61,11 @@ Features:
 - Dry-run mode for preview
 
 Examples:
-  # Scan current directory and generate schema.yaml
+  # Scan current directory and generate schema.star
   morphic struct2schema
 
   # Scan specific directory with custom output
-  morphic struct2schema --input ./models --output schema/generated.yaml
+  morphic struct2schema --input ./models --output schema/generated.star
 
   # Use custom config for type mappings
   morphic struct2schema --config mappings.yaml --database postgresql
@@ -79,7 +79,7 @@ func init() {
 	rootCmd.AddCommand(struct2schemaCmd)
 
 	struct2schemaCmd.Flags().StringVar(&s2sInputDir, "input", ".", "Input directory to scan for Go files")
-	struct2schemaCmd.Flags().StringVar(&s2sOutputFile, "output", "schema/schema.yaml", "Output YAML schema file path")
+	struct2schemaCmd.Flags().StringVar(&s2sOutputFile, "output", "schema/schema.star", "Output Starlark schema file path")
 	struct2schemaCmd.Flags().StringVar(&s2sConfigFile, "config", "", "Configuration file path for custom type mappings")
 	struct2schemaCmd.Flags().StringVar(&s2sTargetDB, "database", "postgresql", "Target database type (postgresql, mysql, sqlite, sqlserver)")
 	struct2schemaCmd.Flags().BoolVar(&s2sDryRunMode, "dry-run", false, "Preview changes without writing files")
@@ -88,8 +88,8 @@ func init() {
 
 func runStruct2Schema(cmd *cobra.Command, args []string) error {
 	if s2sVerboseMode {
-		fmt.Println("struct2schema - Go struct to YAML schema converter")
-		fmt.Println("=============================================")
+		fmt.Println("struct2schema - Go struct to Starlark schema converter")
+		fmt.Println("======================================================")
 	}
 
 	// Initialize the struct2schema processor

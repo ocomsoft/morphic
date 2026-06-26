@@ -144,67 +144,41 @@ type Post struct {
 
 ### Schema Output
 
-```yaml
-database:
-  name: generated_schema
-  version: 1.0.0
-  migration_version: 0.1.0
+```python
+database("generated_schema", "1.0.0")
 
-defaults:
-  postgresql:
-    blank: ''
-    now: CURRENT_TIMESTAMP
-    new_uuid: gen_random_uuid()
-    # ... other defaults
+defaults("postgresql", {
+    "blank": "''",
+    "now": "CURRENT_TIMESTAMP",
+    "new_uuid": "gen_random_uuid()",
+})
 
-tables:
-  - name: user
-    fields:
-      - name: id
-        type: serial
-        primary_key: true
-      - name: name
-        type: varchar
-        length: 255
-        nullable: false
-      - name: email
-        type: varchar
-        length: 255
-        nullable: true
-      - name: created_at
-        type: timestamp
-        auto_create: true
+table("user",
+    fields = [
+        serial("id", primary_key=True),
+        varchar("name", 255),
+        varchar("email", 255, nullable=True),
+        timestamp("created_at", auto_create=True),
+    ],
+)
 
-  - name: post
-    fields:
-      - name: id
-        type: serial  
-        primary_key: true
-      - name: title
-        type: varchar
-        length: 255
-      - name: author_id
-        type: foreign_key
-        foreign_key:
-          table: user
-          on_delete: RESTRICT
+table("post",
+    fields = [
+        serial("id", primary_key=True),
+        varchar("title", 255),
+        foreign_key("author_id", fk("user", on_delete="RESTRICT")),
+    ],
+)
 
-  - name: user_post
-    fields:
-      - name: user_id
-        type: foreign_key
-        foreign_key:
-          table: user
-          on_delete: CASCADE
-      - name: post_id
-        type: foreign_key
-        foreign_key:
-          table: post
-          on_delete: CASCADE
-    indexes:
-      - name: user_post_unique
-        fields: [user_id, post_id]
-        unique: true
+table("user_post",
+    fields = [
+        foreign_key("user_id", fk("user", on_delete="CASCADE")),
+        foreign_key("post_id", fk("post", on_delete="CASCADE")),
+    ],
+    indexes = [
+        index("user_post_unique", ["user_id", "post_id"], unique=True),
+    ],
+)
 ```
 
 ## Advanced Features

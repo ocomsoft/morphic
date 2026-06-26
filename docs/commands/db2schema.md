@@ -42,14 +42,16 @@ morphic db-to-schema [flags]
 ### 1. Database Tables
 Extracts all user-defined tables from the public schema:
 
-```yaml
-tables:
-  - name: users
-    fields: [...]
-  - name: products  
-    fields: [...]
-  - name: orders
-    fields: [...]
+```python
+table("users",
+    fields = [...],
+)
+table("products",
+    fields = [...],
+)
+table("orders",
+    fields = [...],
+)
 ```
 
 ### 2. Field Information
@@ -62,46 +64,29 @@ Complete field metadata including:
 - **Primary Key**: Primary key constraints
 - **Default Values**: Converted to morphic format
 
-```yaml
-fields:
-  - name: id
-    type: uuid
-    primary_key: true
-    default: new_uuid
-    nullable: false
-  - name: email
-    type: varchar
-    length: 255
-    nullable: false
-  - name: created_at
-    type: timestamp
-    default: now
-    nullable: false
+```python
+fields = [
+    uuid("id", primary_key=True, default="new_uuid"),
+    varchar("email", 255),
+    timestamp("created_at", default="now"),
+]
 ```
 
 ### 3. Foreign Key Relationships
 Extracts foreign key constraints with ON DELETE actions:
 
-```yaml
-- name: user_id
-  type: foreign_key
-  nullable: false
-  foreign_key:
-    table: users
-    on_delete: CASCADE
+```python
+foreign_key("user_id", fk("users", on_delete="CASCADE")),
 ```
 
 ### 4. Indexes
 All indexes including unique constraints:
 
-```yaml
-indexes:
-  - name: idx_users_email
-    fields: [email]
-    unique: true
-  - name: idx_users_created_at
-    fields: [created_at]
-    unique: false
+```python
+indexes = [
+    index("idx_users_email", ["email"], unique=True),
+    index("idx_users_created_at", ["created_at"]),
+]
 ```
 
 ### 5. Default Values
@@ -221,88 +206,47 @@ morphic db-to-schema --verbose
 
 ## Generated Starlark Structure
 
-The command generates a complete Starlark schema file (note: the example below shows the logical structure; the actual output is in Starlark format):
+The command generates a complete Starlark schema file:
 
-```yaml
-database:
-  name: extracted_schema
-  version: 1.0.0
+```python
+database("extracted_schema", "1.0.0")
 
-defaults:
-  postgresql:
-    blank: "''"
-    now: CURRENT_TIMESTAMP
-    new_uuid: gen_random_uuid()
-    today: CURRENT_DATE
-    zero: "'0'"
-    true: "'true'"
-    false: "'false'"
-    null: null
+defaults("postgresql", {
+    "blank": "''",
+    "now": "CURRENT_TIMESTAMP",
+    "new_uuid": "gen_random_uuid()",
+    "today": "CURRENT_DATE",
+    "zero": "'0'",
+    "true": "'true'",
+    "false": "'false'",
+    "null": "null",
+})
 
-tables:
-  - name: users
-    fields:
-      - name: id
-        type: uuid
-        primary_key: true
-        default: new_uuid
-        nullable: false
-      - name: email
-        type: varchar
-        length: 255
-        nullable: false
-      - name: username
-        type: varchar
-        length: 100
-        nullable: false
-      - name: password_hash
-        type: varchar
-        length: 255
-        nullable: false
-      - name: is_active
-        type: boolean
-        default: true
-        nullable: true
-      - name: created_at
-        type: timestamp
-        default: now
-        nullable: false
-      - name: updated_at
-        type: timestamp
-        nullable: true
-    indexes:
-      - name: idx_users_email
-        fields: [email]
-        unique: true
-      - name: idx_users_username
-        fields: [username]
-        unique: true
+table("users",
+    fields = [
+        uuid("id", primary_key=True, default="new_uuid"),
+        varchar("email", 255),
+        varchar("username", 100),
+        varchar("password_hash", 255),
+        boolean("is_active", nullable=True, default="true"),
+        timestamp("created_at", default="now"),
+        timestamp("updated_at", nullable=True),
+    ],
+    indexes = [
+        index("idx_users_email", ["email"], unique=True),
+        index("idx_users_username", ["username"], unique=True),
+    ],
+)
 
-  - name: user_profiles
-    fields:
-      - name: id
-        type: serial
-        primary_key: true
-        nullable: false
-      - name: user_id
-        type: foreign_key
-        nullable: false
-        foreign_key:
-          table: users
-          on_delete: CASCADE
-      - name: first_name
-        type: varchar
-        length: 100
-        nullable: true
-      - name: last_name
-        type: varchar
-        length: 100
-        nullable: true
-      - name: bio
-        type: text
-        length: 1000
-        nullable: true
-        default: blank
+table("user_profiles",
+    fields = [
+        serial("id", primary_key=True),
+        foreign_key("user_id", fk("users", on_delete="CASCADE")),
+        varchar("first_name", 100, nullable=True),
+        varchar("last_name", 100, nullable=True),
+        text("bio", nullable=True, default="blank"),
+    ],
+)
 ```
 
 ## Type Mapping
@@ -338,12 +282,9 @@ CREATE TABLE products (
 );
 ```
 
-```yaml
-# Generated schema (shown in YAML-like notation; actual output is Starlark)
-- name: id
-  type: serial
-  primary_key: true
-  nullable: false
+```python
+# Generated schema
+serial("id", primary_key=True)
 ```
 
 ## Connection Security

@@ -111,7 +111,7 @@ func (p *Processor) Process() error {
 
 	// Step 3: Generate schema from structs
 	if p.config.Verbose {
-		fmt.Println("Generating YAML schema...")
+		fmt.Println("Generating Starlark schema...")
 	}
 	schema, err := p.generator.GenerateSchema(structs, relationships)
 	if err != nil {

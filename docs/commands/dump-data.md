@@ -1,6 +1,6 @@
 # dump-data Command
 
-The `dump-data` command connects to a live database, fetches rows from the specified tables, and generates a Go migration file containing `UpsertData` operations. Use this to seed reference or lookup data (e.g. country codes, roles, unit types) so the data is version-controlled and applied consistently across environments via the normal migration workflow.
+The `dump-data` command connects to a live database, fetches rows from the specified tables, and generates a migration file containing `UpsertData` operations. The output format (Go or Starlark) is determined by the `migration.format` setting in your config file. Use this to seed reference or lookup data (e.g. country codes, roles, unit types) so the data is version-controlled and applied consistently across environments via the normal migration workflow.
 
 ## Overview
 
@@ -98,7 +98,31 @@ morphic generate dump-data users --where "users:status='active'" --where "users:
 
 ## Generated Output
 
-The command produces a standard Go migration file. For example, dumping a `unit_type` table with two rows generates:
+The output format depends on the `migration.format` setting in your config file.
+
+### Starlark Output (default)
+
+When `format: starlark`, dumping a `unit_type` table with two rows generates:
+
+```python
+migration(
+    name = "0003_dump_unit_type",
+    dependencies = ["0002_add_indexes"],
+    operations = [
+        upsert_data("unit_type",
+            conflict_keys = ["id"],
+            rows = [
+                row(code="MET", id=1, name="Metric"),
+                row(code="IMP", id=2, name="Imperial"),
+            ],
+        ),
+    ],
+)
+```
+
+### Go Output (legacy)
+
+When `format: go`, the same dump generates:
 
 ```go
 package main
@@ -182,7 +206,7 @@ morphic generate dump-data countries --verbose
 #   42 rows fetched
 # Generating migration: 0005_dump_countries
 # Dependencies: [0004_add_indexes]
-# Created migrations/0005_dump_countries.go
+# Created migrations/0005_dump_countries.star
 ```
 
 ---
@@ -190,7 +214,7 @@ morphic generate dump-data countries --verbose
 ## Limitations
 
 - `--conflict-key` applies to **all** tables in one invocation. If tables have different primary keys, run the command separately for each table.
-- Values are stored as plain Go literals (strings, ints, `nil`). SQL quoting and escaping happen at migration runtime, not at generation time.
+- Values are stored as plain literals (strings, ints, `None`/`nil`). SQL quoting and escaping happen at migration runtime, not at generation time.
 - The `--where` condition is appended to the query as-is. Ensure the condition is valid SQL for your target database.
 
 ---

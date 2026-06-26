@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/ocomsoft/morphic/internal/types"
 )
 
@@ -24,7 +22,7 @@ func TestNewWriter(t *testing.T) {
 	}
 }
 
-// TestPreviewSchema verifies that PreviewSchema produces valid YAML output.
+// TestPreviewSchema verifies that PreviewSchema produces valid Starlark output.
 func TestPreviewSchema(t *testing.T) {
 	t.Parallel()
 
@@ -58,7 +56,7 @@ func TestWriteSchemaNew(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	outputPath := filepath.Join(dir, "schema.yaml")
+	outputPath := filepath.Join(dir, "schema.star")
 
 	w := NewWriter(false)
 
@@ -88,17 +86,24 @@ func TestWriteSchemaNew(t *testing.T) {
 		t.Fatalf("ReadFile: %v", err)
 	}
 
-	// Verify it is valid YAML
-	var loaded types.Schema
-	if err := yaml.Unmarshal(data, &loaded); err != nil {
-		t.Fatalf("Unmarshal written file: %v", err)
-	}
+	content := string(data)
 
-	if loaded.Database.Name != "test_db" {
-		t.Errorf("loaded db name = %q, want %q", loaded.Database.Name, "test_db")
+	// Verify it is valid Starlark DSL
+	if !strings.Contains(content, `database("test_db"`) {
+		t.Errorf("expected database name in output, got:\n%s", content)
 	}
-	if len(loaded.Tables) != 1 {
-		t.Errorf("loaded tables count = %d, want 1", len(loaded.Tables))
+	if !strings.Contains(content, `table("items"`) {
+		t.Error("expected table name in output")
+	}
+	if !strings.Contains(content, `serial("id"`) {
+		t.Error("expected serial field in output")
+	}
+	if !strings.Contains(content, `varchar("title", 100`) {
+		t.Error("expected varchar field in output")
+	}
+	// Must NOT contain YAML syntax
+	if strings.Contains(content, "tables:") || strings.Contains(content, "fields:") {
+		t.Error("Starlark output must not contain YAML syntax")
 	}
 }
 

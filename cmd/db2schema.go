@@ -29,8 +29,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
+	"github.com/ocomsoft/morphic/internal/codegen"
 	"github.com/ocomsoft/morphic/internal/config"
 	"github.com/ocomsoft/morphic/internal/providers"
 	"github.com/ocomsoft/morphic/internal/types"
@@ -55,9 +55,9 @@ var db2schemaCmd = &cobra.Command{
 	Use:     "db-to-schema",
 	Aliases: []string{"db2schema"},
 	GroupID: "convert",
-	Short:   "Extract database schema to YAML schema file",
+	Short:   "Extract database schema to Starlark schema file",
 	Long: `Extract database schema information from a PostgreSQL database and generate
-a YAML schema file compatible with morphic.
+a Starlark schema file compatible with morphic.
 
 This command connects to a PostgreSQL database, reads the INFORMATION_SCHEMA
 tables, and extracts complete metadata including:
@@ -67,7 +67,7 @@ tables, and extracts complete metadata including:
 - Primary key constraints
 - Foreign key relationships with ON DELETE actions
 - Indexes (including unique indexes)
-- Default values (converted to morphic YAML format)
+- Default values (converted to morphic format)
 
 Database Connection:
 The command supports two ways to specify database connection:
@@ -77,7 +77,7 @@ The command supports two ways to specify database connection:
 Command-line flags take precedence over config file settings.
 
 Output:
-By default, the schema is written to 'schema.yaml' in the current directory.
+By default, the schema is written to 'schema.star' in the current directory.
 Use the --output flag to specify a different file path.
 
 Examples:
@@ -88,7 +88,7 @@ Examples:
   morphic db2schema --config=migrations/morphic.config.yaml
 
   # Extract schema to specific output file
-  morphic db2schema --output=extracted_schema.yaml --host=localhost --database=myapp
+  morphic db2schema --output=extracted_schema.star --host=localhost --database=myapp
 
   # Extract with verbose output
   morphic db2schema --verbose --host=localhost --database=myapp
@@ -97,7 +97,7 @@ Supported Databases:
 - PostgreSQL (full support)
 - Other databases: placeholder implementations (will be added in future versions)
 
-The generated YAML file follows the morphic schema format and can be used
+The generated Starlark file follows the morphic schema format and can be used
 directly with other morphic commands.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runDB2Schema(cmd, args)
@@ -107,8 +107,8 @@ directly with other morphic commands.`,
 // runDB2Schema executes the db2schema command
 func runDB2Schema(cmd *cobra.Command, args []string) error {
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Extracting database schema to YAML\n")
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "==================================\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Extracting database schema to Starlark\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "======================================\n")
 	}
 
 	// Parse database type from config or default to PostgreSQL
@@ -165,17 +165,17 @@ func runDB2Schema(cmd *cobra.Command, args []string) error {
 	}
 
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Converting to YAML format...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Converting to Starlark DSL format...\n")
 	}
 
-	// Convert schema to YAML
-	yamlData, err := yaml.Marshal(schema)
+	// Convert schema to Starlark DSL
+	dslData, err := codegen.GenerateSchemaDSL(schema)
 	if err != nil {
-		return fmt.Errorf("failed to marshal schema to YAML: %w", err)
+		return fmt.Errorf("failed to generate Starlark DSL: %w", err)
 	}
 
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n3. Writing YAML schema file...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n3. Writing Starlark schema file...\n")
 	}
 
 	// Create output directory if it doesn't exist
@@ -186,8 +186,8 @@ func runDB2Schema(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Write YAML file
-	if err := os.WriteFile(output, yamlData, 0644); err != nil {
+	// Write Starlark file
+	if err := os.WriteFile(output, []byte(dslData), 0644); err != nil {
 		return fmt.Errorf("failed to write schema file: %w", err)
 	}
 
@@ -281,7 +281,7 @@ func init() {
 	db2schemaCmd.Flags().StringVar(&sslmode, "sslmode", "", "SSL mode (default: disable)")
 
 	// Output flags
-	db2schemaCmd.Flags().StringVar(&output, "output", "schema.yaml", "Output YAML schema file path")
+	db2schemaCmd.Flags().StringVar(&output, "output", "schema.star", "Output Starlark schema file path")
 
 	// Common flags
 	db2schemaCmd.Flags().BoolVar(&verbose, "verbose", false, "Show detailed processing information")

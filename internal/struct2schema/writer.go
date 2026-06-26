@@ -29,8 +29,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/ocomsoft/morphic/internal/codegen"
+	"github.com/ocomsoft/morphic/internal/interp"
 	"github.com/ocomsoft/morphic/internal/types"
 )
 
@@ -46,7 +46,7 @@ func NewWriter(verbose bool) *Writer {
 	}
 }
 
-// WriteSchema writes a schema to a YAML file
+// WriteSchema writes a schema to a Starlark DSL file
 func (w *Writer) WriteSchema(schema *types.Schema, outputPath string) error {
 	if w.verbose {
 		fmt.Printf("Writing schema to: %s\n", outputPath)
@@ -80,14 +80,14 @@ func (w *Writer) WriteSchema(schema *types.Schema, outputPath string) error {
 		return fmt.Errorf("generated schema is invalid: %w", err)
 	}
 
-	// Marshal to YAML
-	yamlData, err := yaml.Marshal(schema)
+	// Generate Starlark DSL
+	dslData, err := codegen.GenerateSchemaDSL(schema)
 	if err != nil {
-		return fmt.Errorf("failed to marshal schema to YAML: %w", err)
+		return fmt.Errorf("failed to generate Starlark DSL: %w", err)
 	}
 
 	// Write to file
-	if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(dslData), 0644); err != nil {
 		return fmt.Errorf("failed to write schema file: %w", err)
 	}
 
@@ -100,32 +100,24 @@ func (w *Writer) WriteSchema(schema *types.Schema, outputPath string) error {
 
 // PreviewSchema prints the schema to stdout for dry-run mode
 func (w *Writer) PreviewSchema(schema *types.Schema) error {
-	yamlData, err := yaml.Marshal(schema)
+	dslData, err := codegen.GenerateSchemaDSL(schema)
 	if err != nil {
-		return fmt.Errorf("failed to marshal schema to YAML: %w", err)
+		return fmt.Errorf("failed to generate Starlark DSL: %w", err)
 	}
 
-	fmt.Print(string(yamlData))
+	fmt.Print(dslData)
 	return nil
 }
 
-// loadExistingSchema loads an existing schema file if it exists
+// loadExistingSchema loads an existing schema file if it exists.
+// Supports both .star (Starlark DSL) and .yaml formats.
 func (w *Writer) loadExistingSchema(path string) (*types.Schema, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, nil // File doesn't exist, not an error
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var schema types.Schema
-	if err := yaml.Unmarshal(data, &schema); err != nil {
-		return nil, err
-	}
-
-	return &schema, nil
+	dir := filepath.Dir(path)
+	return interp.LoadSchema(dir, w.verbose)
 }
 
 // backupExistingFile creates a backup of an existing file

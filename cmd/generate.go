@@ -542,7 +542,16 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	}
 
 	mergeGen := codegen.NewMergeGenerator()
-	src, err := mergeGen.GenerateMerge(name, dagOut.Leaves)
+	cfg := config.LoadOrDefault(cfgFile)
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
+
+	var src string
+	var err error
+	if format == codegen.FormatStarlark {
+		src, err = mergeGen.GenerateStarlarkMerge(name, dagOut.Leaves)
+	} else {
+		src, err = mergeGen.GenerateMerge(name, dagOut.Leaves)
+	}
 	if err != nil {
 		return fmt.Errorf("generating merge migration: %w", err)
 	}
@@ -559,8 +568,6 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
-	cfg := config.LoadOrDefault(cfgFile)
-	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing merge migration: %w", err)

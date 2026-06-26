@@ -50,12 +50,12 @@ var (
 
 // dumpDataCmd is the "morphic dump-data" subcommand. It connects to a
 // live database, fetches all rows from the specified tables, and generates a
-// Go migration file containing UpsertData operations for each table.
+// migration file containing UpsertData operations for each table.
 var dumpDataCmd = &cobra.Command{
 	Use:   "dump-data [table1 table2 ...]",
 	Short: "Generate a migration that upserts data from live database tables",
 	Long: `Connects to a live database, fetches all rows from the specified tables,
-and generates a Go migration file containing UpsertData operations.
+and generates a migration file containing UpsertData operations.
 
 Primary keys are determined from the migration SchemaState (reconstructed from
 existing migrations). Use --conflict-key to override PK detection or when the
@@ -213,8 +213,14 @@ func runDumpData(_ *cobra.Command, args []string) error {
 
 	// Generate source.
 	gen := codegen.NewDumpDataGenerator()
+	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
-	src, err := gen.Generate(name, deps, tables)
+	var src string
+	if format == codegen.FormatStarlark {
+		src, err = gen.GenerateStarlark(name, deps, tables)
+	} else {
+		src, err = gen.Generate(name, deps, tables)
+	}
 	if err != nil {
 		return fmt.Errorf("generating dump-data migration: %w", err)
 	}
@@ -229,7 +235,6 @@ func runDumpData(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("creating migrations directory: %w", err)
 	}
 
-	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		return fmt.Errorf("writing dump-data migration: %w", err)

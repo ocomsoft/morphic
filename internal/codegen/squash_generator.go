@@ -92,6 +92,39 @@ func (g *SquashGenerator) GenerateSquash(
 	return string(formatted), nil
 }
 
+// GenerateStarlarkSquash generates a .star squashed migration file.
+func (g *SquashGenerator) GenerateStarlarkSquash(
+	name string,
+	replaces []string,
+	migrations []*migrate.Migration,
+) (string, error) {
+	var b strings.Builder
+
+	b.WriteString("migration(\n")
+	fmt.Fprintf(&b, "    name = %q,\n", name)
+	b.WriteString("    dependencies = [],\n")
+
+	replaceStrs := make([]string, len(replaces))
+	for i, r := range replaces {
+		replaceStrs[i] = fmt.Sprintf("%q", r)
+	}
+	fmt.Fprintf(&b, "    replaces = [%s],\n", strings.Join(replaceStrs, ", "))
+
+	b.WriteString("    operations = [\n")
+	for _, mig := range migrations {
+		for _, op := range mig.Operations {
+			opStr, err := convertOperation(op)
+			if err != nil {
+				return "", fmt.Errorf("converting operation from %q to Starlark: %w", mig.Name, err)
+			}
+			b.WriteString(opStr)
+		}
+	}
+	b.WriteString("    ],\n")
+	b.WriteString(")\n")
+	return b.String(), nil
+}
+
 // renderOperation converts a migrate.Operation back to Go source literal.
 // It reuses the package-level generateFieldLiteral and generateIndexLiteral
 // functions from go_generator.go since they work with yaml.Field/yaml.Index types.

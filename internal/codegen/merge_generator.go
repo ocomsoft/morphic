@@ -69,3 +69,15 @@ func (g *MergeGenerator) GenerateMerge(name string, deps []string) (string, erro
 	}
 	return string(formatted), nil
 }
+
+// GenerateStarlarkMerge generates a .star merge migration file.
+func (g *MergeGenerator) GenerateStarlarkMerge(name string, deps []string) (string, error) {
+	var b strings.Builder
+
+	b.WriteString("migration(\n")
+	fmt.Fprintf(&b, "    name = %q,\n", name)
+	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
+	b.WriteString("    operations = [],\n")
+	b.WriteString(")\n")
+	return b.String(), nil
+}

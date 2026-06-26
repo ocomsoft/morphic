@@ -114,6 +114,54 @@ func (g *DumpDataGenerator) writeUpsertData(b *strings.Builder, td TableDump) er
 	return nil
 }
 
+// GenerateStarlark produces a .star migration file source containing upsert_data
+// operations for each table dump.
+func (g *DumpDataGenerator) GenerateStarlark(name string, deps []string, tables []TableDump) (string, error) {
+	if len(tables) == 0 {
+		return "", fmt.Errorf("at least one table dump is required")
+	}
+
+	var b strings.Builder
+
+	b.WriteString("migration(\n")
+	fmt.Fprintf(&b, "    name = %q,\n", name)
+	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
+	b.WriteString("    operations = [\n")
+
+	for _, td := range tables {
+		g.writeStarlarkUpsertData(&b, td)
+	}
+
+	b.WriteString("    ],\n")
+	b.WriteString(")\n")
+	return b.String(), nil
+}
+
+// writeStarlarkUpsertData writes a single upsert_data(...) call to the builder.
+func (g *DumpDataGenerator) writeStarlarkUpsertData(b *strings.Builder, td TableDump) {
+	fmt.Fprintf(b, "        upsert_data(%q,\n", td.Table)
+
+	conflictStrs := make([]string, len(td.ConflictKeys))
+	for i, k := range td.ConflictKeys {
+		conflictStrs[i] = fmt.Sprintf("%q", k)
+	}
+	fmt.Fprintf(b, "            conflict_keys = [%s],\n", strings.Join(conflictStrs, ", "))
+
+	b.WriteString("            rows = [\n")
+	for _, row := range td.Rows {
+		b.WriteString("                row(")
+		keys := sortedMapKeys(row)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, formatStarlarkLiteral(row[k])))
+		}
+		b.WriteString(strings.Join(parts, ", "))
+		b.WriteString("),\n")
+	}
+	b.WriteString("            ],\n")
+	b.WriteString("        ),\n")
+}
+
 // formatGoLiteral converts a Go value to its Go source literal representation.
 func formatGoLiteral(v any) string {
 	if v == nil {

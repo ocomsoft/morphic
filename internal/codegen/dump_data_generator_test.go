@@ -266,6 +266,59 @@ func TestDumpDataGenerator_Starlark_BoolAndNumericValues(t *testing.T) {
 	}
 }
 
+func TestGenerateStarlarkWithRowsFile_SingleTable(t *testing.T) {
+	gen := codegen.NewDumpDataGenerator()
+	tables := []codegen.TableDump{
+		{
+			Table:        "countries",
+			ConflictKeys: []string{"code"},
+			Rows:         []map[string]any{{"code": "AU"}},
+		},
+	}
+	src, err := gen.GenerateStarlarkWithRowsFile("0003_dump_countries", []string{"0002_initial"}, tables)
+	if err != nil {
+		t.Fatalf("GenerateStarlarkWithRowsFile: %v", err)
+	}
+	if !strings.Contains(src, `rows_file = "0003_dump_countries_countries.jsonl"`) {
+		t.Errorf("expected rows_file reference, got:\n%s", src)
+	}
+	if strings.Contains(src, "rows = [") {
+		t.Errorf("should not contain inline rows, got:\n%s", src)
+	}
+}
+
+func TestGenerateStarlarkWithRowsFile_MultiTable(t *testing.T) {
+	gen := codegen.NewDumpDataGenerator()
+	tables := []codegen.TableDump{
+		{Table: "countries", ConflictKeys: []string{"code"}, Rows: []map[string]any{{"code": "AU"}}},
+		{Table: "currencies", ConflictKeys: []string{"code"}, Rows: []map[string]any{{"code": "AUD"}}},
+	}
+	src, err := gen.GenerateStarlarkWithRowsFile("0003_dump_data", []string{"0002_initial"}, tables)
+	if err != nil {
+		t.Fatalf("GenerateStarlarkWithRowsFile: %v", err)
+	}
+	if !strings.Contains(src, `rows_file = "0003_dump_data_countries.jsonl"`) {
+		t.Errorf("expected countries rows_file, got:\n%s", src)
+	}
+	if !strings.Contains(src, `rows_file = "0003_dump_data_currencies.jsonl"`) {
+		t.Errorf("expected currencies rows_file, got:\n%s", src)
+	}
+}
+
+func TestGenerateStarlarkWithRowsFile_EmptyTables(t *testing.T) {
+	gen := codegen.NewDumpDataGenerator()
+
+	_, err := gen.GenerateStarlarkWithRowsFile("0003_dump", []string{"0002_prev"}, nil)
+	if err == nil {
+		t.Fatal("expected error for nil tables, got nil")
+	}
+
+	_, err = gen.GenerateStarlarkWithRowsFile("0003_dump", []string{"0002_prev"}, []codegen.TableDump{})
+	if err == nil {
+		t.Fatal("expected error for empty tables, got nil")
+	}
+}
+
 func TestDumpDataGenerator_NoDeps(t *testing.T) {
 	g := codegen.NewDumpDataGenerator()
 	tables := []codegen.TableDump{

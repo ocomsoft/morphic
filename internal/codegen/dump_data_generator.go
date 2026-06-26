@@ -162,6 +162,46 @@ func (g *DumpDataGenerator) writeStarlarkUpsertData(b *strings.Builder, td Table
 	b.WriteString("        ),\n")
 }
 
+// GenerateStarlarkWithRowsFile produces a .star migration file where each
+// upsert_data operation references an external JSONL file via rows_file
+// instead of inlining the row data.
+func (g *DumpDataGenerator) GenerateStarlarkWithRowsFile(name string, deps []string, tables []TableDump) (string, error) {
+	if len(tables) == 0 {
+		return "", fmt.Errorf("at least one table dump is required")
+	}
+
+	var b strings.Builder
+
+	b.WriteString("migration(\n")
+	fmt.Fprintf(&b, "    name = %q,\n", name)
+	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
+	b.WriteString("    operations = [\n")
+
+	for _, td := range tables {
+		g.writeStarlarkUpsertDataWithRowsFile(&b, name, td)
+	}
+
+	b.WriteString("    ],\n")
+	b.WriteString(")\n")
+	return b.String(), nil
+}
+
+// writeStarlarkUpsertDataWithRowsFile writes a upsert_data() call with
+// rows_file instead of inline rows.
+func (g *DumpDataGenerator) writeStarlarkUpsertDataWithRowsFile(b *strings.Builder, migrationName string, td TableDump) {
+	fmt.Fprintf(b, "        upsert_data(%q,\n", td.Table)
+
+	conflictStrs := make([]string, len(td.ConflictKeys))
+	for i, k := range td.ConflictKeys {
+		conflictStrs[i] = fmt.Sprintf("%q", k)
+	}
+	fmt.Fprintf(b, "            conflict_keys = [%s],\n", strings.Join(conflictStrs, ", "))
+
+	jsonlFile := fmt.Sprintf("%s_%s.jsonl", migrationName, td.Table)
+	fmt.Fprintf(b, "            rows_file = %q,\n", jsonlFile)
+	b.WriteString("        ),\n")
+}
+
 // formatGoLiteral converts a Go value to its Go source literal representation.
 func formatGoLiteral(v any) string {
 	if v == nil {

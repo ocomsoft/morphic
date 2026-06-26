@@ -26,6 +26,7 @@ morphic generate dump-data [table1 table2 ...] [flags]
 | `--verbose` | bool | `false` | Show connection and row-count details |
 | `--conflict-key` | []string | (auto) | Override PK detection; applied to all tables |
 | `--where` | []string | (none) | WHERE filter; use `table:condition` for per-table or just `condition` for all |
+| `--json` | bool | `false` | Write row data to JSONL files instead of inlining in the migration (Starlark only) |
 | `--dsn` | string | `""` | Full database DSN (overrides host/port/etc.) |
 | `--host` | string | `localhost` | Database host |
 | `--port` | int | (varies) | Database port |
@@ -208,6 +209,66 @@ morphic generate dump-data countries --verbose
 # Dependencies: [0004_add_indexes]
 # Created migrations/0005_dump_countries.star
 ```
+
+---
+
+## External JSONL Files (`--json`)
+
+The `--json` flag writes row data to separate JSONL files alongside the migration instead of inlining them in the `.star` file. This is useful for large datasets where inline rows would make the migration file unwieldy.
+
+### How It Works
+
+```bash
+morphic generate dump-data countries currencies --json
+```
+
+This creates:
+```
+migrations/
+  0003_dump_data.star
+  0003_dump_data_countries.jsonl
+  0003_dump_data_currencies.jsonl
+```
+
+The generated `.star` file references the JSONL files:
+
+```python
+migration(
+    name = "0003_dump_data",
+    dependencies = ["0002_initial"],
+    operations = [
+        upsert_data(
+            "countries",
+            conflict_keys = ["code"],
+            rows_file = "0003_dump_data_countries.jsonl",
+        ),
+        upsert_data(
+            "currencies",
+            conflict_keys = ["code"],
+            rows_file = "0003_dump_data_currencies.jsonl",
+        ),
+    ],
+)
+```
+
+### JSONL Format
+
+Each file contains one JSON object per line, with keys sorted alphabetically:
+
+```jsonl
+{"code": "AU", "name": "Australia", "population": 26000000}
+{"code": "NZ", "name": "New Zealand", "population": 5000000}
+```
+
+### Runtime Behavior
+
+When `morphic migrate up` applies a migration with `rows_file`, the JSONL file is read lazily at runtime. The file must exist in the migrations directory alongside the `.star` file.
+
+### Notes
+
+- `--json` only works with Starlark format (the default). Using it with Go format produces an error.
+- `--dry-run` with `--json` prints the migration source and lists the JSONL files that would be created, but does not write any files.
+- The JSONL files are committed to version control alongside the migration.
 
 ---
 

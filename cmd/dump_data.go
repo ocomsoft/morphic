@@ -46,6 +46,7 @@ var (
 	dumpDataConflictKey []string
 	dumpDataDSN         string
 	dumpDataWhere       []string
+	dumpDataJSON        bool
 )
 
 // dumpDataCmd is the "morphic dump-data" subcommand. It connects to a
@@ -84,7 +85,10 @@ Examples:
   morphic generate dump-data users --where "users:status='active'"
 
   # Apply the same filter to all tables
-  morphic generate dump-data countries currencies --where "active = 1"`,
+  morphic generate dump-data countries currencies --where "active = 1"
+
+  # Write rows to external JSONL files
+  morphic generate dump-data countries --json`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runDumpData,
 }
@@ -104,6 +108,8 @@ func init() {
 		"Full database DSN (overrides host/port/etc)")
 	dumpDataCmd.Flags().StringSliceVar(&dumpDataWhere, "where", nil,
 		`WHERE filter per table; use "table:condition" for per-table or just "condition" for all tables`)
+	dumpDataCmd.Flags().BoolVar(&dumpDataJSON, "json", false,
+		"Write row data to JSONL files instead of inlining in the migration (Starlark only)")
 
 	// Register DB connection flags bound to existing package-level vars
 	// declared in cmd/db2schema.go.
@@ -215,19 +221,50 @@ func runDumpData(_ *cobra.Command, args []string) error {
 	gen := codegen.NewDumpDataGenerator()
 	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
-	src, genErr := gen.GenerateStarlark(name, deps, tables)
+	if dumpDataJSON && format != codegen.FormatStarlark {
+		return fmt.Errorf("--json flag is only supported with Starlark format")
+	}
+
+	var src string
+	var genErr error
+	if dumpDataJSON {
+		src, genErr = gen.GenerateStarlarkWithRowsFile(name, deps, tables)
+	} else {
+		src, genErr = gen.GenerateStarlark(name, deps, tables)
+	}
 	if genErr != nil {
 		return fmt.Errorf("generating dump-data migration: %w", genErr)
 	}
 
 	if dumpDataDryRun {
 		fmt.Print(src)
+		if dumpDataJSON {
+			fmt.Println("\n# JSONL files that would be created:")
+			for _, td := range tables {
+				jsonlFile := fmt.Sprintf("%s_%s.jsonl", name, td.Table)
+				fmt.Printf("#   %s (%d rows)\n", filepath.Join(migrationsDir, jsonlFile), len(td.Rows))
+			}
+		}
 		return nil
 	}
 
 	// Write the migration file.
 	if err := os.MkdirAll(migrationsDir, 0o755); err != nil {
 		return fmt.Errorf("creating migrations directory: %w", err)
+	}
+
+	// Write JSONL files when --json is set.
+	if dumpDataJSON {
+		for _, td := range tables {
+			jsonlFile := fmt.Sprintf("%s_%s.jsonl", name, td.Table)
+			jsonlPath := filepath.Join(migrationsDir, jsonlFile)
+			if err := codegen.WriteTableJSONL(jsonlPath, td.Rows); err != nil {
+				return fmt.Errorf("writing JSONL file for table %q: %w", td.Table, err)
+			}
+			if dumpDataVerbose {
+				fmt.Printf("Wrote %s (%d rows)\n", jsonlPath, len(td.Rows))
+			}
+		}
 	}
 
 	outPath := filepath.Join(migrationsDir, codegen.MigrationFileNameForFormat(name, format))

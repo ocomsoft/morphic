@@ -53,6 +53,7 @@ func (g *DumpDataGenerator) GenerateStarlark(name string, deps []string, tables 
 
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "generate dump-data"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
@@ -102,6 +103,7 @@ func (g *DumpDataGenerator) GenerateStarlarkWithRowsFile(name string, deps []str
 
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "generate dump-data --json"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))

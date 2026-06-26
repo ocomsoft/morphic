@@ -51,6 +51,7 @@ func (g *StarlarkGenerator) FileExtension() string {
 // GenerateBlank generates a blank Starlark migration with a TODO comment.
 func (g *StarlarkGenerator) GenerateBlank(name string, deps []string) (string, error) {
 	var b strings.Builder
+	b.WriteString(GenerationHeader("#", "generate empty"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
@@ -75,6 +76,7 @@ func (g *StarlarkGenerator) GenerateMigration(
 
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "generate morphic"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))

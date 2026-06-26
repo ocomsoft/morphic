@@ -41,6 +41,7 @@ import (
 func ConvertMigrationToStarlark(m *migrate.Migration) (string, error) {
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "from-makemigrations"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", m.Name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(m.Dependencies))

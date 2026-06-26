@@ -49,6 +49,7 @@ func (g *SquashGenerator) GenerateStarlarkSquash(
 ) (string, error) {
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "generate squash"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	b.WriteString("    dependencies = [],\n")

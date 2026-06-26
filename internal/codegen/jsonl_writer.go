@@ -40,6 +40,10 @@ func WriteTableJSONL(path string, rows []map[string]any) error {
 	}
 	defer func() { _ = f.Close() }()
 
+	if _, err := f.WriteString(GenerationHeader("#", "generate dump-data --json")); err != nil {
+		return fmt.Errorf("writing header: %w", err)
+	}
+
 	for i, row := range rows {
 		sorted := sortedJSONRow(row)
 		data, err := json.Marshal(sorted)

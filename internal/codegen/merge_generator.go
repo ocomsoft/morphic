@@ -44,6 +44,7 @@ func NewMergeGenerator() *MergeGenerator {
 func (g *MergeGenerator) GenerateStarlarkMerge(name string, deps []string) (string, error) {
 	var b strings.Builder
 
+	b.WriteString(GenerationHeader("#", "generate merge"))
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))

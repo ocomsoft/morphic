@@ -1,10 +1,8 @@
 # Starlark Migration Format
 
-Starlark (`.star`) is an alternative migration format alongside Go (`.go`). It uses a Python-like DSL powered by [Starlark-Go](https://pkg.go.dev/go.starlark.net) that is more concise than the Go format while producing identical migration operations at runtime.
+Starlark (`.star`) is the migration format for Morphic. It uses a Python-like DSL powered by [Starlark-Go](https://pkg.go.dev/go.starlark.net) that is concise, deterministic, and sandboxed.
 
 Migration files are loaded by `morphic migrate` from your migrations directory. Each `.star` file defines exactly one migration using the `migration()` function.
-
-> **When to use Starlark vs Go.** Starlark is ideal for schema changes, data seeding, and most day-to-day migrations. Use Go (`.go`) migrations when you need to import third-party packages, use complex control flow, or call Go APIs that aren't exposed as Starlark builtins.
 
 ---
 
@@ -653,18 +651,6 @@ migration(
     ],
 )
 ```
-
----
-
-## Converting from Go Migrations
-
-Existing Go (`.go`) migration files can be converted to Starlark format using the `morphic convert` command:
-
-```bash
-morphic convert migrations/ -o migrations_starlark/
-```
-
-This loads each Go migration file, extracts the operations, and emits equivalent `.star` files. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
 
 ---
 

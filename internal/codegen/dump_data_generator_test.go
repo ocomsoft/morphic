@@ -25,113 +25,11 @@ SOFTWARE.
 package codegen_test
 
 import (
-	"go/format"
 	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/internal/codegen"
 )
-
-func TestDumpDataGenerator_SingleTable(t *testing.T) {
-	g := codegen.NewDumpDataGenerator()
-	tables := []codegen.TableDump{
-		{
-			Table:        "unit_type",
-			ConflictKeys: []string{"id"},
-			Rows: []map[string]any{
-				{
-					"id":          "9163b64b-cdda-4cb8-9e28-12afc8581e36",
-					"code":        "I",
-					"description": "Imperial",
-				},
-				{
-					"id":          "abc123",
-					"code":        "M",
-					"description": nil,
-				},
-			},
-		},
-	}
-
-	src, err := g.Generate("0003_dump_unit_type", []string{"0002_update_schema"}, tables)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-
-	// Verify the output compiles as valid Go via format.Source.
-	if _, err := format.Source([]byte(src)); err != nil {
-		t.Fatalf("generated source does not compile: %v\nSource:\n%s", err, src)
-	}
-
-	if !strings.Contains(src, `"unit_type"`) {
-		t.Error("expected table name in output")
-	}
-	if !strings.Contains(src, "UpsertData") {
-		t.Error("expected UpsertData operation in output")
-	}
-	if !strings.Contains(src, `"id"`) {
-		t.Error("expected conflict key in output")
-	}
-	if !strings.Contains(src, `"Imperial"`) {
-		t.Error("expected row value in output")
-	}
-	if !strings.Contains(src, "nil") {
-		t.Error("expected nil value in output for nil field")
-	}
-	// Verify column keys are sorted alphabetically: code < description < id.
-	codeIdx := strings.Index(src, `"code"`)
-	descIdx := strings.Index(src, `"description"`)
-	idIdx := strings.Index(src, `"id"`)
-	if codeIdx == -1 || descIdx == -1 || idIdx == -1 {
-		t.Fatal("expected all column keys to be present")
-	}
-}
-
-func TestDumpDataGenerator_MultiTable(t *testing.T) {
-	g := codegen.NewDumpDataGenerator()
-	tables := []codegen.TableDump{
-		{
-			Table:        "countries",
-			ConflictKeys: []string{"code"},
-			Rows: []map[string]any{
-				{"code": "AU", "name": "Australia"},
-			},
-		},
-		{
-			Table:        "states",
-			ConflictKeys: []string{"id"},
-			Rows: []map[string]any{
-				{"id": int64(1), "name": "Queensland", "country_code": "AU"},
-			},
-		},
-	}
-
-	src, err := g.Generate("0004_dump_geo", []string{"0003_prev"}, tables)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-
-	if !strings.Contains(src, `"countries"`) {
-		t.Error("expected first table name in output")
-	}
-	if !strings.Contains(src, `"states"`) {
-		t.Error("expected second table name in output")
-	}
-}
-
-func TestDumpDataGenerator_EmptyTables(t *testing.T) {
-	g := codegen.NewDumpDataGenerator()
-
-	_, err := g.Generate("0003_dump", []string{"0002_prev"}, nil)
-	if err == nil {
-		t.Fatal("expected error for nil tables, got nil")
-	}
-
-	_, err = g.Generate("0003_dump", []string{"0002_prev"}, []codegen.TableDump{})
-	if err == nil {
-		t.Fatal("expected error for empty tables, got nil")
-	}
-}
 
 func TestDumpDataGenerator_Starlark_SingleTable(t *testing.T) {
 	g := codegen.NewDumpDataGenerator()
@@ -319,7 +217,7 @@ func TestGenerateStarlarkWithRowsFile_EmptyTables(t *testing.T) {
 	}
 }
 
-func TestDumpDataGenerator_NoDeps(t *testing.T) {
+func TestDumpDataGenerator_Starlark_NoDeps(t *testing.T) {
 	g := codegen.NewDumpDataGenerator()
 	tables := []codegen.TableDump{
 		{
@@ -331,12 +229,12 @@ func TestDumpDataGenerator_NoDeps(t *testing.T) {
 		},
 	}
 
-	src, err := g.Generate("0001_dump_config", []string{}, tables)
+	src, err := g.GenerateStarlark("0001_dump_config", []string{}, tables)
 	if err != nil {
-		t.Fatalf("Generate: %v", err)
+		t.Fatalf("GenerateStarlark: %v", err)
 	}
 
-	if !strings.Contains(src, `Dependencies: []string{}`) {
-		t.Errorf("expected empty dependencies slice, got:\n%s", src)
+	if !strings.Contains(src, `dependencies = []`) {
+		t.Errorf("expected empty dependencies list, got:\n%s", src)
 	}
 }

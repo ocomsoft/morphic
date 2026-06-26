@@ -22,32 +22,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// Package codegen generates Go source files for the migration framework.
 package codegen
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 )
 
-// MergeGenerator generates merge migration .go files.
-// Merge migrations have no operations — they exist only to establish a
-// common ancestor for two divergent branches of the migration DAG.
-type MergeGenerator struct{}
-
-// NewMergeGenerator creates a new MergeGenerator.
-func NewMergeGenerator() *MergeGenerator {
-	return &MergeGenerator{}
+// NextMigrationNumber returns a zero-padded 4-digit number for the next migration.
+func NextMigrationNumber(count int) string {
+	return fmt.Sprintf("%04d", count+1)
 }
 
-// GenerateStarlarkMerge generates a .star merge migration file.
-func (g *MergeGenerator) GenerateStarlarkMerge(name string, deps []string) (string, error) {
-	var b strings.Builder
-
-	b.WriteString("migration(\n")
-	fmt.Fprintf(&b, "    name = %q,\n", name)
-	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(deps))
-	b.WriteString("    operations = [],\n")
-	b.WriteString(")\n")
-	return b.String(), nil
+// sortedMapKeys returns the keys of a map in sorted order.
+func sortedMapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

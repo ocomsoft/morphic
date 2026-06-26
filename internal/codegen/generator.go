@@ -30,7 +30,6 @@ import "github.com/ocomsoft/morphic/internal/yaml"
 type MigrationFormat string
 
 const (
-	FormatGo       MigrationFormat = "go"
 	FormatStarlark MigrationFormat = "starlark"
 )
 
@@ -52,32 +51,17 @@ type MigrationGenerator interface {
 	FileExtension() string
 }
 
-// MigrationFileNameForFormat returns the file name for a migration in the given format.
-func MigrationFileNameForFormat(name string, format MigrationFormat) string {
-	switch format {
-	case FormatStarlark:
-		return name + ".star"
-	default:
-		return name + ".go"
-	}
+// MigrationFileNameForFormat returns the .star file name for a migration.
+func MigrationFileNameForFormat(name string, _ MigrationFormat) string {
+	return name + ".star"
 }
 
-// FormatFromExtension returns the format based on a file extension.
-func FormatFromExtension(ext string) MigrationFormat {
-	switch ext {
-	case ".star":
-		return FormatStarlark
-	default:
-		return FormatGo
-	}
+// FormatFromExtension returns the migration format (always Starlark).
+func FormatFromExtension(_ string) MigrationFormat {
+	return FormatStarlark
 }
 
-// ParseMigrationFormat parses a format string from config, defaulting to Starlark.
-func ParseMigrationFormat(s string) MigrationFormat {
-	switch s {
-	case "go":
-		return FormatGo
-	default:
-		return FormatStarlark
-	}
+// ParseMigrationFormat parses a format string from config (always returns Starlark).
+func ParseMigrationFormat(_ string) MigrationFormat {
+	return FormatStarlark
 }

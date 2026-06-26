@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/mod/modfile"
 
 	"github.com/ocomsoft/morphic/internal/codegen"
 	"github.com/ocomsoft/morphic/internal/config"
@@ -492,15 +491,9 @@ func BuildMigrationName(currentCount int, customName, autoName string) string {
 	return fmt.Sprintf("%s_%s", num, time.Now().Format("20060102150405"))
 }
 
-// newGenerator returns the appropriate MigrationGenerator based on the config format.
-func newGenerator(cfg *config.Config) codegen.MigrationGenerator {
-	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
-	switch format {
-	case codegen.FormatStarlark:
-		return codegen.NewStarlarkGenerator()
-	default:
-		return codegen.NewGoGenerator()
-	}
+// newGenerator returns the Starlark MigrationGenerator.
+func newGenerator(_ *config.Config) codegen.MigrationGenerator {
+	return codegen.NewStarlarkGenerator()
 }
 
 // countMigrationFiles returns all migration files (.go and .star) in the directory,
@@ -522,7 +515,7 @@ func countMigrationFiles(migrationsDir string) ([]string, error) {
 }
 
 // goGenerateMerge generates a merge migration for detected branches. It uses
-// codegen.MergeGenerator to produce a .go file that depends on all branch
+// codegen.MergeGenerator to produce a Starlark file that depends on all branch
 // leaves but contains no operations, thus unifying the DAG.
 func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, verbose bool) error {
 	// Count existing migration files
@@ -545,13 +538,7 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	cfg := config.LoadOrDefault(cfgFile)
 	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
-	var src string
-	var err error
-	if format == codegen.FormatStarlark {
-		src, err = mergeGen.GenerateStarlarkMerge(name, dagOut.Leaves)
-	} else {
-		src, err = mergeGen.GenerateMerge(name, dagOut.Leaves)
-	}
+	src, err := mergeGen.GenerateStarlarkMerge(name, dagOut.Leaves)
 	if err != nil {
 		return fmt.Errorf("generating merge migration: %w", err)
 	}
@@ -575,42 +562,4 @@ func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, ve
 	fmt.Printf("Created merge migration: %s\n", outPath)
 	fmt.Printf("Dependencies: %s\n", strings.Join(dagOut.Leaves, ", "))
 	return nil
-}
-
-// findParentGoVersion walks up from startDir looking for a go.work or go.mod.
-// It returns the most specific Go version found, preferring the toolchain
-// directive (e.g. "1.25.7") over the go directive (e.g. "1.25"), because the
-// toolchain directive has the full patch version that is already cached locally.
-// Returns "" if nothing is found.
-func findParentGoVersion(startDir string) string {
-	dir := startDir
-	for {
-		workPath := filepath.Join(dir, "go.work")
-		if data, err := os.ReadFile(workPath); err == nil {
-			if f, err := modfile.ParseWork(workPath, data, nil); err == nil {
-				if f.Toolchain != nil && f.Toolchain.Name != "" {
-					return strings.TrimPrefix(f.Toolchain.Name, "go")
-				}
-				if f.Go != nil {
-					return f.Go.Version
-				}
-			}
-		}
-		modPath := filepath.Join(dir, "go.mod")
-		if data, err := os.ReadFile(modPath); err == nil {
-			if f, err := modfile.Parse(modPath, data, nil); err == nil {
-				if f.Toolchain != nil && f.Toolchain.Name != "" {
-					return strings.TrimPrefix(f.Toolchain.Name, "go")
-				}
-				if f.Go != nil {
-					return f.Go.Version
-				}
-			}
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
 }

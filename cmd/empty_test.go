@@ -38,13 +38,13 @@ import (
 func TestRunEmpty_WritesBlankFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	gen := codegen.NewBlankGenerator()
+	gen := codegen.NewStarlarkGenerator()
 	src, err := gen.GenerateBlank("0001_blank", []string{})
 	if err != nil {
 		t.Fatalf("GenerateBlank: %v", err)
 	}
 
-	outPath := filepath.Join(tmpDir, "0001_blank.go")
+	outPath := filepath.Join(tmpDir, "0001_blank.star")
 	if err := os.WriteFile(outPath, []byte(src), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -61,28 +61,28 @@ func TestRunEmpty_WritesBlankFile(t *testing.T) {
 	if !strings.Contains(content, "TODO") {
 		t.Error("expected TODO comment in blank migration file")
 	}
-	if !strings.Contains(content, "Operations") {
-		t.Error("expected Operations field in file")
+	if !strings.Contains(content, "operations") {
+		t.Error("expected operations field in file")
 	}
 }
 
 // TestRunEmpty_NoDepsWhenNoMigrations verifies that a blank migration generated
-// with no prior migrations has an empty Dependencies slice.
+// with no prior migrations has an empty dependencies list.
 func TestRunEmpty_NoDepsWhenNoMigrations(t *testing.T) {
-	gen := codegen.NewBlankGenerator()
+	gen := codegen.NewStarlarkGenerator()
 	src, err := gen.GenerateBlank("0001_blank", []string{})
 	if err != nil {
 		t.Fatalf("GenerateBlank: %v", err)
 	}
 
-	if !strings.Contains(src, `Dependencies: []string{}`) {
+	if !strings.Contains(src, `dependencies = []`) {
 		t.Errorf("expected empty dependencies, got:\n%s", src)
 	}
 }
 
 // TestRunEmpty_WithDeps verifies that dependencies are included correctly.
 func TestRunEmpty_WithDeps(t *testing.T) {
-	gen := codegen.NewBlankGenerator()
+	gen := codegen.NewStarlarkGenerator()
 	src, err := gen.GenerateBlank("0003_blank", []string{"0002_add_users"})
 	if err != nil {
 		t.Fatalf("GenerateBlank: %v", err)
@@ -95,7 +95,7 @@ func TestRunEmpty_WithDeps(t *testing.T) {
 
 // TestRunEmpty_CustomName verifies that the migration name suffix is used.
 func TestRunEmpty_CustomName(t *testing.T) {
-	gen := codegen.NewBlankGenerator()
+	gen := codegen.NewStarlarkGenerator()
 	src, err := gen.GenerateBlank("0004_add_triggers", []string{})
 	if err != nil {
 		t.Fatalf("GenerateBlank: %v", err)

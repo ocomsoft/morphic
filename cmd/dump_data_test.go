@@ -156,12 +156,12 @@ func TestDumpData_DryRun(t *testing.T) {
 		t.Errorf("expected output to contain row value 'Red', got:\n%s", output)
 	}
 
-	if !strings.Contains(output, "UpsertData") {
-		t.Errorf("expected output to contain 'UpsertData', got:\n%s", output)
+	if !strings.Contains(output, "upsert_data") {
+		t.Errorf("expected output to contain 'upsert_data', got:\n%s", output)
 	}
 
-	if !strings.Contains(output, "ConflictKeys") {
-		t.Errorf("expected output to contain 'ConflictKeys', got:\n%s", output)
+	if !strings.Contains(output, "conflict_keys") {
+		t.Errorf("expected output to contain 'conflict_keys', got:\n%s", output)
 	}
 }
 

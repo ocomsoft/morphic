@@ -904,18 +904,6 @@ run_sql(
 
 ---
 
-## Converting from Go Migrations
-
-Existing Go (`.go`) migration files can be converted to Starlark format using the `morphic convert` command:
-
-```bash
-morphic convert migrations/ -o migrations_starlark/
-```
-
-This loads each Go migration, extracts the operations, and emits equivalent `.star` files. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
-
----
-
 ## See Also
 
 - [morphic command](./commands/morphic.md) — auto-generating migration files

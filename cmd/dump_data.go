@@ -215,14 +215,9 @@ func runDumpData(_ *cobra.Command, args []string) error {
 	gen := codegen.NewDumpDataGenerator()
 	format := codegen.ParseMigrationFormat(cfg.Migration.Format)
 
-	var src string
-	if format == codegen.FormatStarlark {
-		src, err = gen.GenerateStarlark(name, deps, tables)
-	} else {
-		src, err = gen.Generate(name, deps, tables)
-	}
-	if err != nil {
-		return fmt.Errorf("generating dump-data migration: %w", err)
+	src, genErr := gen.GenerateStarlark(name, deps, tables)
+	if genErr != nil {
+		return fmt.Errorf("generating dump-data migration: %w", genErr)
 	}
 
 	if dumpDataDryRun {

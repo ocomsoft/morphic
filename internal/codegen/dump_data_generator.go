@@ -26,7 +26,6 @@ package codegen
 
 import (
 	"fmt"
-	"go/format"
 	"strings"
 )
 
@@ -37,81 +36,12 @@ type TableDump struct {
 	Rows         []map[string]any // row data (all rows same keys)
 }
 
-// DumpDataGenerator generates Go migration source containing UpsertData operations.
+// DumpDataGenerator generates Starlark migration source containing UpsertData operations.
 type DumpDataGenerator struct{}
 
 // NewDumpDataGenerator creates a new DumpDataGenerator.
 func NewDumpDataGenerator() *DumpDataGenerator {
 	return &DumpDataGenerator{}
-}
-
-// Generate produces a complete .go migration file source containing UpsertData
-// operations for each table dump. name is the migration name (e.g. "0003_dump_countries"),
-// deps is the list of dependency migration names, and tables must contain at least one entry.
-func (g *DumpDataGenerator) Generate(name string, deps []string, tables []TableDump) (string, error) {
-	if len(tables) == 0 {
-		return "", fmt.Errorf("at least one table dump is required")
-	}
-
-	var b strings.Builder
-
-	b.WriteString("package main\n\n")
-	b.WriteString("import m \"github.com/ocomsoft/morphic/migrate\"\n\n")
-	b.WriteString("func init() {\n")
-	fmt.Fprintf(&b, "\tm.Register(&m.Migration{\n")
-	fmt.Fprintf(&b, "\t\tName:         %q,\n", name)
-
-	// Dependencies
-	depStrs := make([]string, len(deps))
-	for i, d := range deps {
-		depStrs[i] = fmt.Sprintf("%q", d)
-	}
-	fmt.Fprintf(&b, "\t\tDependencies: []string{%s},\n", strings.Join(depStrs, ", "))
-
-	// Operations
-	b.WriteString("\t\tOperations: []m.Operation{\n")
-	for _, td := range tables {
-		if err := g.writeUpsertData(&b, td); err != nil {
-			return "", fmt.Errorf("writing UpsertData for table %q: %w", td.Table, err)
-		}
-	}
-	b.WriteString("\t\t},\n")
-
-	b.WriteString("\t})\n")
-	b.WriteString("}\n")
-
-	formatted, err := format.Source([]byte(b.String()))
-	if err != nil {
-		return "", fmt.Errorf("formatting dump-data migration: %w\nRaw:\n%s", err, b.String())
-	}
-	return string(formatted), nil
-}
-
-// writeUpsertData writes a single &m.UpsertData{...} literal to the builder.
-func (g *DumpDataGenerator) writeUpsertData(b *strings.Builder, td TableDump) error {
-	fmt.Fprintf(b, "\t\t\t&m.UpsertData{\n")
-	fmt.Fprintf(b, "\t\t\t\tTable: %q,\n", td.Table)
-
-	// ConflictKeys
-	keyStrs := make([]string, len(td.ConflictKeys))
-	for i, k := range td.ConflictKeys {
-		keyStrs[i] = fmt.Sprintf("%q", k)
-	}
-	fmt.Fprintf(b, "\t\t\t\tConflictKeys: []string{%s},\n", strings.Join(keyStrs, ", "))
-
-	// Rows
-	b.WriteString("\t\t\t\tRows: []map[string]any{\n")
-	for _, row := range td.Rows {
-		b.WriteString("\t\t\t\t\t{\n")
-		for _, key := range sortedMapKeys(row) {
-			fmt.Fprintf(b, "\t\t\t\t\t\t%q: %s,\n", key, formatGoLiteral(row[key]))
-		}
-		b.WriteString("\t\t\t\t\t},\n")
-	}
-	b.WriteString("\t\t\t\t},\n")
-
-	b.WriteString("\t\t\t},\n")
-	return nil
 }
 
 // GenerateStarlark produces a .star migration file source containing upsert_data
@@ -200,25 +130,4 @@ func (g *DumpDataGenerator) writeStarlarkUpsertDataWithRowsFile(b *strings.Build
 	jsonlFile := fmt.Sprintf("%s_%s.jsonl", migrationName, td.Table)
 	fmt.Fprintf(b, "            rows_file = %q,\n", jsonlFile)
 	b.WriteString("        ),\n")
-}
-
-// formatGoLiteral converts a Go value to its Go source literal representation.
-func formatGoLiteral(v any) string {
-	if v == nil {
-		return "nil"
-	}
-	switch val := v.(type) {
-	case string:
-		return fmt.Sprintf("%q", val)
-	case int64:
-		return fmt.Sprintf("%d", val)
-	case int:
-		return fmt.Sprintf("%d", val)
-	case float64:
-		return fmt.Sprintf("%g", val)
-	case bool:
-		return fmt.Sprintf("%t", val)
-	default:
-		return fmt.Sprintf("%q", fmt.Sprintf("%v", val))
-	}
 }

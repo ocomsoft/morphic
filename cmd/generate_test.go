@@ -371,10 +371,10 @@ func TestGoGenerateMerge_WritesMergeFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify a .go file was written
-	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.go"))
+	// Verify a .star file was written
+	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.star"))
 	if len(files) != 1 {
-		t.Fatalf("expected 1 .go file, got %d", len(files))
+		t.Fatalf("expected 1 .star file, got %d", len(files))
 	}
 
 	content, err := os.ReadFile(files[0])
@@ -409,9 +409,9 @@ func TestGoGenerateMerge_DryRun(t *testing.T) {
 	}
 
 	// No file should be written in dry-run mode
-	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.go"))
+	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.star"))
 	if len(files) != 0 {
-		t.Fatalf("expected 0 .go files in dry-run, got %d", len(files))
+		t.Fatalf("expected 0 .star files in dry-run, got %d", len(files))
 	}
 }
 
@@ -431,11 +431,10 @@ func TestGoGenerateMerge_LongNameTruncation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.go"))
+	files, _ := filepath.Glob(filepath.Join(tmpDir, "*.star"))
 	if len(files) != 1 {
-		t.Fatalf("expected 1 .go file, got %d", len(files))
+		t.Fatalf("expected 1 .star file, got %d", len(files))
 	}
-	// The filename should be truncated — just check it was written
 	baseName := filepath.Base(files[0])
 	if !strings.Contains(baseName, "merge") {
 		t.Errorf("expected filename to contain 'merge', got %q", baseName)

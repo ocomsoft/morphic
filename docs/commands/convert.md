@@ -1,10 +1,10 @@
 # from-makemigrations Command
 
-The `from-makemigrations` command converts existing Go (Yaegi) migration files to Starlark (`.star`) format. This is a one-time migration tool for projects adopting the Starlark migration format from the old makemigrations format.
+The `from-makemigrations` command converts existing legacy migration files to Starlark (`.star`) format. This is a one-time migration tool for projects adopting the Starlark migration format from the old makemigrations format.
 
 ## Overview
 
-The command loads each `.go` migration file, extracts its operations (create table, add field, alter field, etc.), and emits an equivalent `.star` file using the Starlark DSL. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
+The command loads each legacy `.go` migration file, extracts its operations (create table, add field, alter field, etc.), and emits an equivalent `.star` file using the Starlark DSL. The conversion is lossless — the resulting Starlark migrations produce identical database operations.
 
 ## Usage
 
@@ -16,7 +16,7 @@ morphic from-makemigrations <migrations-dir> -o <output-dir>
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `migrations-dir` | Yes | Path to the directory containing `.go` migration files |
+| `migrations-dir` | Yes | Path to the directory containing legacy `.go` migration files |
 
 ## Command Flags
 
@@ -26,13 +26,13 @@ morphic from-makemigrations <migrations-dir> -o <output-dir>
 
 ## Examples
 
-Convert all Go migrations to Starlark:
+Convert all legacy migrations to Starlark:
 
 ```bash
 morphic from-makemigrations migrations/ -o migrations_starlark/
 ```
 
-Convert and overwrite in place (replace Go format with Starlark):
+Convert and overwrite in place (replace legacy format with Starlark):
 
 ```bash
 morphic from-makemigrations migrations/ -o migrations_new/
@@ -56,7 +56,7 @@ The command preserves:
 ## Output
 
 ```
-Loading Go migrations from migrations/...
+Loading legacy migrations from migrations/...
 Found 26 migration(s). Converting...
   ✓ 0001_initial.star
   ✓ 0002_add_contact.star

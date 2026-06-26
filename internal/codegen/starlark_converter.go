@@ -242,23 +242,27 @@ func convertUpsertData(op *migrate.UpsertData) string {
 	}
 	fmt.Fprintf(&b, "            conflict_keys = [%s],\n", strings.Join(conflictStrs, ", "))
 
-	b.WriteString("            rows = [\n")
-	for _, row := range op.Rows {
-		b.WriteString("                row(")
-		keys := make([]string, 0, len(row))
-		for k := range row {
-			keys = append(keys, k)
+	if op.RowsFile != "" {
+		fmt.Fprintf(&b, "            rows_file = %q,\n", op.RowsFile)
+	} else {
+		b.WriteString("            rows = [\n")
+		for _, row := range op.Rows {
+			b.WriteString("                row(")
+			keys := make([]string, 0, len(row))
+			for k := range row {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			parts := make([]string, 0, len(keys))
+			for _, k := range keys {
+				v := row[k]
+				parts = append(parts, fmt.Sprintf("%s=%s", k, formatStarlarkLiteral(v)))
+			}
+			b.WriteString(strings.Join(parts, ", "))
+			b.WriteString("),\n")
 		}
-		sort.Strings(keys)
-		parts := make([]string, 0, len(keys))
-		for _, k := range keys {
-			v := row[k]
-			parts = append(parts, fmt.Sprintf("%s=%s", k, formatStarlarkLiteral(v)))
-		}
-		b.WriteString(strings.Join(parts, ", "))
-		b.WriteString("),\n")
+		b.WriteString("            ],\n")
 	}
-	b.WriteString("            ],\n")
 	b.WriteString("        ),\n")
 	return b.String()
 }

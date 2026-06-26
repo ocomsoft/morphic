@@ -25,62 +25,11 @@ SOFTWARE.
 package codegen_test
 
 import (
-	"go/format"
 	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/internal/codegen"
 )
-
-func TestMergeGenerator_GenerateMerge(t *testing.T) {
-	g := codegen.NewMergeGenerator()
-	src, err := g.GenerateMerge("0004_merge_feature_a_and_b",
-		[]string{"0003_feature_a", "0003_feature_b"})
-	if err != nil {
-		t.Fatalf("GenerateMerge: %v", err)
-	}
-	if _, err := format.Source([]byte(src)); err != nil {
-		t.Fatalf("output is not valid Go: %v\nSource:\n%s", err, src)
-	}
-	if !strings.Contains(src, "0004_merge_feature_a_and_b") {
-		t.Error("expected migration name in output")
-	}
-	if !strings.Contains(src, "0003_feature_a") {
-		t.Error("expected first dependency in output")
-	}
-	if !strings.Contains(src, "0003_feature_b") {
-		t.Error("expected second dependency in output")
-	}
-	// Merge migrations have no operations
-	if strings.Contains(src, "CreateTable") || strings.Contains(src, "AddField") {
-		t.Error("merge migration should have no operations")
-	}
-}
-
-func TestMergeGenerator_GenerateMerge_EmptyDeps(t *testing.T) {
-	g := codegen.NewMergeGenerator()
-	src, err := g.GenerateMerge("0001_merge", []string{})
-	if err != nil {
-		t.Fatalf("GenerateMerge with empty deps: %v", err)
-	}
-	if _, err := format.Source([]byte(src)); err != nil {
-		t.Fatalf("output is not valid Go: %v", err)
-	}
-}
-
-func TestMergeGenerator_GenerateMerge_SingleDep(t *testing.T) {
-	g := codegen.NewMergeGenerator()
-	src, err := g.GenerateMerge("0002_merge", []string{"0001_initial"})
-	if err != nil {
-		t.Fatalf("GenerateMerge: %v", err)
-	}
-	if !strings.Contains(src, "0001_initial") {
-		t.Error("expected dep in output")
-	}
-	if !strings.Contains(src, "Operations") {
-		t.Error("expected Operations field in output")
-	}
-}
 
 func TestMergeGenerator_GenerateStarlarkMerge(t *testing.T) {
 	g := codegen.NewMergeGenerator()
@@ -118,19 +67,5 @@ func TestMergeGenerator_GenerateStarlarkMerge_EmptyDeps(t *testing.T) {
 	}
 	if !strings.Contains(src, "dependencies = []") {
 		t.Errorf("expected empty dependencies, got:\n%s", src)
-	}
-}
-
-func TestMergeGenerator_Output_HasPackageMain(t *testing.T) {
-	g := codegen.NewMergeGenerator()
-	src, err := g.GenerateMerge("0003_merge", []string{"0002_a", "0002_b"})
-	if err != nil {
-		t.Fatalf("GenerateMerge: %v", err)
-	}
-	if !strings.Contains(src, "package main") {
-		t.Error("expected 'package main' in merge output")
-	}
-	if !strings.Contains(src, "func init()") {
-		t.Error("expected 'func init()' in merge output")
 	}
 }

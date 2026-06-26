@@ -181,7 +181,7 @@ Each command is in its own source file. The CLI is built with Cobra.
 |------------------------|--------------------------------|-------------------------------------------------------------|
 | `root.go`              | `morphic`               | Root command, Viper config loading                          |
 | `go_migrations.go`     | `morphic generate`| Starlark migration generator (primary workflow)             |
-| `go_init.go`           | `morphic init`          | Bootstrap `migrations/` directory structure                 |
+| `init.go`              | `morphic init`          | Bootstrap `migrations/` directory structure                 |
 | `sql_migrations.go`    | `morphic sql-migrations`| Legacy SQL migration generator                              |
 | `init_sql.go`          | `morphic init --sql`    | Legacy SQL project setup                                    |
 | `goose.go`             | `morphic goose`         | Goose runner integration (legacy)                           |
@@ -373,7 +373,7 @@ Commands exposed by `App`:
 
 #### 2.9 Starlark Built-ins (`internal/starlark_loader/`)
 
-The Starlark-Go loader exposes `migrate` package types directly as Starlark built-in functions and values. There is no separate symbol-map extraction step. The loader defines built-ins such as `migration()`, `create_table()`, `add_field()`, etc., which construct the corresponding Go `migrate.*` types and register them into the per-load `*migrate.Registry`. This approach is simpler than the previous yaegi symbol map: new built-ins are added by registering additional `starlark.Builtin` values in the loader, with no code-generation step.
+The Starlark-Go loader exposes `migrate` package types directly as Starlark built-in functions and values. There is no separate symbol-map extraction step. The loader defines built-ins such as `migration()`, `create_table()`, `add_field()`, etc., which construct the corresponding Go `migrate.*` types and register them into the per-load `*migrate.Registry`. New built-ins are added by registering additional `starlark.Builtin` values in the loader, with no code-generation step.
 
 ### 3. Code Generation (`internal/codegen/`)
 
@@ -415,10 +415,6 @@ migration(
     ],
 )
 ```
-
-#### 3.1a GoGenerator (`internal/codegen/go_generator.go`)
-
-The GoGenerator remains available for projects that opted into the Go format before the Starlark migration. It converts a `yaml.SchemaDiff` into a `.go` source file. The StarlarkGenerator is now the primary generator; GoGenerator is retained for backwards compatibility.
 
 #### 3.2 MergeGenerator (`internal/codegen/merge_generator.go`)
 
@@ -742,7 +738,6 @@ Each CLI command is its own source file in `cmd/`. Each command is a Cobra `*cob
 | `migrate/operations_test.go`                            | All 10 operation types, forward/reverse SQL           |
 | `migrate/runner_test.go`                                | Up/Down/Status/ShowSQL                                |
 | `internal/codegen/starlark_generator_test.go`           | Generated Starlark source correctness                 |
-| `internal/codegen/go_generator_test.go`                 | Generated Go source correctness (legacy format)       |
 | `internal/codegen/merge_generator_test.go`              | Merge migration generation                            |
 | `internal/codegen/squash_generator_test.go`             | Squash migration generation                           |
 | `cmd/go_migrations_test.go`                             | End-to-end generation command                         |
@@ -802,7 +797,7 @@ github.com/ocomsoft/morphic
 ├── cmd/                           One file per CLI command
 │   ├── root.go
 │   ├── go_migrations.go           morphic generate (primary — Starlark workflow)
-│   ├── go_init.go                 morphic init
+│   ├── init.go                    morphic init
 │   ├── sql_migrations.go          morphic sql-migrations (legacy)
 │   ├── init_sql.go                morphic init --sql (legacy)
 │   ├── goose.go                   morphic goose (legacy)
@@ -828,7 +823,6 @@ github.com/ocomsoft/morphic
 ├── internal/
 │   ├── codegen/                   Migration file code generation
 │   │   ├── starlark_generator.go  StarlarkGenerator: migration .star files (primary)
-│   │   ├── go_generator.go        GoGenerator: migration .go files (legacy format)
 │   │   ├── merge_generator.go     MergeGenerator: merge migrations
 │   │   └── squash_generator.go    SquashGenerator: squash migrations
 │   ├── starlark_loader/           Starlark-Go built-ins and schema loader

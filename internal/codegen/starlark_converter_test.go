@@ -3,6 +3,7 @@ package codegen_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/internal/codegen"
@@ -142,6 +143,31 @@ func TestConvertMigrationToStarlark_UpsertData(t *testing.T) {
 	}
 	if len(ud.Rows) != 2 {
 		t.Errorf("expected 2 rows, got %d", len(ud.Rows))
+	}
+}
+
+func TestConvertMigrationToStarlark_UpsertDataWithRowsFile(t *testing.T) {
+	m := &migrate.Migration{
+		Name:         "0003_seed",
+		Dependencies: []string{"0002_initial"},
+		Operations: []migrate.Operation{
+			&migrate.UpsertData{
+				Table:        "countries",
+				ConflictKeys: []string{"code"},
+				RowsFile:     "0003_seed_countries.jsonl",
+			},
+		},
+	}
+
+	src, err := codegen.ConvertMigrationToStarlark(m)
+	if err != nil {
+		t.Fatalf("ConvertMigrationToStarlark: %v", err)
+	}
+	if !strings.Contains(src, `rows_file = "0003_seed_countries.jsonl"`) {
+		t.Errorf("expected rows_file in output, got:\n%s", src)
+	}
+	if strings.Contains(src, "rows = [") {
+		t.Errorf("should not contain inline rows when rows_file is set, got:\n%s", src)
 	}
 }
 

@@ -72,12 +72,12 @@ func FormatFromExtension(ext string) MigrationFormat {
 	}
 }
 
-// ParseMigrationFormat parses a format string from config, defaulting to Go.
+// ParseMigrationFormat parses a format string from config, defaulting to Starlark.
 func ParseMigrationFormat(s string) MigrationFormat {
 	switch s {
-	case "starlark", "star":
-		return FormatStarlark
-	default:
+	case "go":
 		return FormatGo
+	default:
+		return FormatStarlark
 	}
 }

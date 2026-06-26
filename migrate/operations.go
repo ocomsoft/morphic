@@ -28,6 +28,7 @@ package migrate
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/ocomsoft/morphic/internal/providers"
@@ -921,6 +922,10 @@ type UpsertData struct {
 	// formatted as SQL literals via FormatLiteral, supporting nil, string, bool,
 	// integer, float, and time.Time types.
 	Rows []map[string]any
+	// RowsFile is the relative path to a JSONL file containing row data.
+	// When set and Rows is empty, rows are loaded lazily at runtime from
+	// filepath.Join(migrationsDir, RowsFile).
+	RowsFile string
 }
 
 // TypeName returns the operation type identifier.
@@ -943,18 +948,26 @@ func (op *UpsertData) Describe() string {
 // DefaultRef values in rows are resolved through the defaults map: if the key
 // is present, the resolved SQL expression is emitted verbatim (not quoted); if
 // not, the DefaultRef string itself is used as a raw SQL expression.
-func (op *UpsertData) Up(p providers.Provider, _ *SchemaState, defaults map[string]string, _ string) (string, error) {
-	if len(op.Rows) == 0 {
+func (op *UpsertData) Up(p providers.Provider, _ *SchemaState, defaults map[string]string, migrationsDir string) (string, error) {
+	rows := op.Rows
+	if len(rows) == 0 && op.RowsFile != "" {
+		loaded, err := loadJSONLRows(filepath.Join(migrationsDir, op.RowsFile))
+		if err != nil {
+			return "", fmt.Errorf("loading rows from %s: %w", op.RowsFile, err)
+		}
+		rows = loaded
+	}
+	if len(rows) == 0 {
 		return "", nil
 	}
 
 	// Determine a stable column order by sorting the keys of the first row.
-	columns := SortedKeys(op.Rows[0])
+	columns := SortedKeys(rows[0])
 
 	// Pre-format every value as a SQL literal string, resolving any DefaultRef
 	// values through the active defaults map.
-	valueLiterals := make([][]string, len(op.Rows))
-	for i, row := range op.Rows {
+	valueLiterals := make([][]string, len(rows))
+	for i, row := range rows {
 		rowLits := make([]string, len(columns))
 		for j, col := range columns {
 			rowLits[j] = formatUpsertValue(row[col], defaults)
@@ -982,14 +995,22 @@ func formatUpsertValue(v any, defaults map[string]string) string {
 
 // Down generates DELETE statements that remove each upserted row by matching
 // on the ConflictKeys. Returns empty string when Rows or ConflictKeys is empty.
-func (op *UpsertData) Down(p providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
-	if len(op.Rows) == 0 || len(op.ConflictKeys) == 0 {
+func (op *UpsertData) Down(p providers.Provider, _ *SchemaState, _ map[string]string, migrationsDir string) (string, error) {
+	rows := op.Rows
+	if len(rows) == 0 && op.RowsFile != "" {
+		loaded, err := loadJSONLRows(filepath.Join(migrationsDir, op.RowsFile))
+		if err != nil {
+			return "", fmt.Errorf("loading rows from %s: %w", op.RowsFile, err)
+		}
+		rows = loaded
+	}
+	if len(rows) == 0 || len(op.ConflictKeys) == 0 {
 		return "", nil
 	}
 
 	tbl := p.QuoteName(op.Table)
-	stmts := make([]string, 0, len(op.Rows))
-	for _, row := range op.Rows {
+	stmts := make([]string, 0, len(rows))
+	for _, row := range rows {
 		conditions := make([]string, 0, len(op.ConflictKeys))
 		for _, key := range op.ConflictKeys {
 			conditions = append(conditions,

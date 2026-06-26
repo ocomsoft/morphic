@@ -25,6 +25,8 @@ SOFTWARE.
 package migrate_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -282,5 +284,105 @@ func TestUpsertData_Up_ColumnOrder(t *testing.T) {
 	posZ := strings.Index(sql, "z_key")
 	if posA >= posM || posM >= posZ {
 		t.Errorf("expected alphabetical column order in SQL:\n%s", sql)
+	}
+}
+
+// TestUpsertData_UpWithRowsFile verifies that Up loads rows from a JSONL file
+// when Rows is empty and RowsFile is set.
+func TestUpsertData_UpWithRowsFile(t *testing.T) {
+	dir := t.TempDir()
+	jsonlPath := filepath.Join(dir, "seed_countries.jsonl")
+	content := `{"code": "AU", "name": "Australia"}
+{"code": "NZ", "name": "New Zealand"}
+`
+	if err := os.WriteFile(jsonlPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		RowsFile:     "seed_countries.jsonl",
+	}
+	p := sqlite.New()
+	state := &migrate.SchemaState{}
+
+	upSQL, err := op.Up(p, state, nil, dir)
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if !strings.Contains(upSQL, "countries") {
+		t.Errorf("expected SQL to reference 'countries', got:\n%s", upSQL)
+	}
+	if !strings.Contains(upSQL, "'AU'") {
+		t.Errorf("expected SQL to contain 'AU', got:\n%s", upSQL)
+	}
+	if !strings.Contains(upSQL, "'New Zealand'") {
+		t.Errorf("expected SQL to contain 'New Zealand', got:\n%s", upSQL)
+	}
+}
+
+// TestUpsertData_DownWithRowsFile verifies that Down loads rows from a JSONL file
+// when Rows is empty and RowsFile is set, generating DELETE statements.
+func TestUpsertData_DownWithRowsFile(t *testing.T) {
+	dir := t.TempDir()
+	jsonlPath := filepath.Join(dir, "seed_countries.jsonl")
+	content := `{"code": "AU", "name": "Australia"}
+{"code": "NZ", "name": "New Zealand"}
+`
+	if err := os.WriteFile(jsonlPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		RowsFile:     "seed_countries.jsonl",
+	}
+	p := sqlite.New()
+	state := &migrate.SchemaState{}
+
+	downSQL, err := op.Down(p, state, nil, dir)
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	if !strings.Contains(downSQL, "DELETE FROM") {
+		t.Errorf("expected DELETE statements, got:\n%s", downSQL)
+	}
+	if !strings.Contains(downSQL, "'AU'") {
+		t.Errorf("expected SQL to contain 'AU', got:\n%s", downSQL)
+	}
+}
+
+// TestUpsertData_RowsFileMissing verifies that an error is returned when the
+// JSONL file referenced by RowsFile does not exist.
+func TestUpsertData_RowsFileMissing(t *testing.T) {
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		RowsFile:     "nonexistent.jsonl",
+	}
+	_, err := op.Up(sqlite.New(), &migrate.SchemaState{}, nil, t.TempDir())
+	if err == nil {
+		t.Fatal("expected error for missing JSONL file")
+	}
+}
+
+// TestUpsertData_InlineRowsTakePrecedence verifies that when both Rows and RowsFile
+// are set, the inline Rows take precedence and RowsFile is not read.
+func TestUpsertData_InlineRowsTakePrecedence(t *testing.T) {
+	op := &migrate.UpsertData{
+		Table:        "countries",
+		ConflictKeys: []string{"code"},
+		Rows:         []map[string]any{{"code": "AU", "name": "Australia"}},
+		RowsFile:     "should_not_be_read.jsonl",
+	}
+	p := sqlite.New()
+	upSQL, err := op.Up(p, &migrate.SchemaState{}, nil, "")
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if !strings.Contains(upSQL, "'AU'") {
+		t.Errorf("expected SQL from inline rows, got:\n%s", upSQL)
 	}
 }

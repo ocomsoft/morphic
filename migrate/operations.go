@@ -40,9 +40,9 @@ import (
 // Up/Down method names align with the CLI commands `./migrate up` / `./migrate down`.
 type Operation interface {
 	// Up generates the forward SQL for this operation.
-	Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error)
+	Up(p providers.Provider, state *SchemaState, defaults map[string]string, migrationsDir string) (string, error)
 	// Down generates the reverse SQL to undo this operation.
-	Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error)
+	Down(p providers.Provider, state *SchemaState, defaults map[string]string, migrationsDir string) (string, error)
 	// Mutate applies this operation to the given SchemaState, updating the
 	// in-memory schema representation during migration graph traversal.
 	Mutate(state *SchemaState) error
@@ -171,7 +171,7 @@ func (op *CreateTable) Describe() string {
 
 // Up generates the CREATE TABLE SQL statement, or returns empty string when SchemaOnly is set.
 // Field defaults are resolved against the active defaults map before being passed to the provider.
-func (op *CreateTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *CreateTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -193,7 +193,7 @@ func (op *CreateTable) Up(p providers.Provider, state *SchemaState, defaults map
 // constraints from other tables) are automatically removed, preventing ordering
 // failures when multiple CreateTable operations are rolled back together.
 // Returns empty string when SchemaOnly is set.
-func (op *CreateTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *CreateTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -234,7 +234,7 @@ func (op *DropTable) IsDestructive() bool { return true }
 func (op *DropTable) Describe() string { return fmt.Sprintf("Drop table %s", op.Name) }
 
 // Up generates the DROP TABLE SQL statement, or returns empty string when SchemaOnly is set.
-func (op *DropTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -243,7 +243,7 @@ func (op *DropTable) Up(p providers.Provider, state *SchemaState, defaults map[s
 
 // Down reconstructs the CREATE TABLE SQL by reading the table's pre-drop state.
 // Returns empty string when SchemaOnly is set.
-func (op *DropTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -287,12 +287,12 @@ func (op *RenameTable) Describe() string {
 }
 
 // Up generates the RENAME TABLE SQL statement.
-func (op *RenameTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *RenameTable) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateRenameTable(op.OldName, op.NewName), nil
 }
 
 // Down generates the reverse RENAME TABLE SQL to restore the original name.
-func (op *RenameTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *RenameTable) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateRenameTable(op.NewName, op.OldName), nil
 }
 
@@ -329,7 +329,7 @@ func (op *AddField) Describe() string {
 
 // Up generates the ADD COLUMN SQL statement, or returns empty string when SchemaOnly is set.
 // The field default is resolved against the active defaults map before being passed to the provider.
-func (op *AddField) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AddField) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -340,7 +340,7 @@ func (op *AddField) Up(p providers.Provider, state *SchemaState, defaults map[st
 
 // Down generates the DROP COLUMN SQL to reverse the addition.
 // Returns empty string when SchemaOnly is set.
-func (op *AddField) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AddField) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -384,7 +384,7 @@ func (op *DropField) Describe() string {
 }
 
 // Up generates the DROP COLUMN SQL statement, or returns empty string when SchemaOnly is set.
-func (op *DropField) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropField) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -394,7 +394,7 @@ func (op *DropField) Up(p providers.Provider, state *SchemaState, defaults map[s
 // Down reconstructs the ADD COLUMN SQL by reading the field's pre-drop state.
 // Returns empty string when SchemaOnly is set.
 // The field default is resolved against the active defaults map before being passed to the provider.
-func (op *DropField) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropField) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -469,7 +469,7 @@ func tableStateToTypesTable(state *SchemaState, tableName string, defaults map[s
 // If the provider implements TableRecreationProvider (e.g. SQLite), the full
 // current table definition is passed so the provider can recreate the table.
 // Field defaults are resolved against the active defaults map before use.
-func (op *AlterField) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AlterField) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	oldF := toTypesField(op.OldField)
 	newF := toTypesField(op.NewField)
 	resolveFieldDefault(oldF, defaults)
@@ -485,7 +485,7 @@ func (op *AlterField) Up(p providers.Provider, state *SchemaState, defaults map[
 // If the provider implements TableRecreationProvider (e.g. SQLite), the full
 // current table definition is passed so the provider can recreate the table.
 // Field defaults are resolved against the active defaults map before use.
-func (op *AlterField) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AlterField) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	oldF := toTypesField(op.OldField)
 	newF := toTypesField(op.NewField)
 	resolveFieldDefault(oldF, defaults)
@@ -527,12 +527,12 @@ func (op *RenameField) Describe() string {
 }
 
 // Up generates the RENAME COLUMN SQL statement.
-func (op *RenameField) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *RenameField) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateRenameColumn(op.Table, op.OldName, op.NewName), nil
 }
 
 // Down generates the reverse RENAME COLUMN SQL to restore the original name.
-func (op *RenameField) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *RenameField) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateRenameColumn(op.Table, op.NewName, op.OldName), nil
 }
 
@@ -564,13 +564,13 @@ func (op *AddIndex) Describe() string {
 }
 
 // Up generates the CREATE INDEX SQL statement.
-func (op *AddIndex) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AddIndex) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	ti := &types.Index{Name: op.Index.Name, Unique: op.Index.Unique, Fields: op.Index.Fields, Method: op.Index.Method, Where: op.Index.Where}
 	return p.GenerateCreateIndex(ti, op.Table), nil
 }
 
 // Down generates the DROP INDEX SQL to reverse the index creation.
-func (op *AddIndex) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *AddIndex) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateDropIndex(op.Index.Name, op.Table), nil
 }
 
@@ -606,12 +606,12 @@ func (op *DropIndex) Describe() string {
 }
 
 // Up generates the DROP INDEX SQL statement.
-func (op *DropIndex) Up(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropIndex) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	return p.GenerateDropIndex(op.Index, op.Table), nil
 }
 
 // Down reconstructs the CREATE INDEX SQL by reading the index's pre-drop state.
-func (op *DropIndex) Down(p providers.Provider, state *SchemaState, defaults map[string]string) (string, error) {
+func (op *DropIndex) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	ts, exists := state.Tables[op.Table]
 	if !exists {
 		return "", fmt.Errorf("table %q not found in state", op.Table)
@@ -685,14 +685,14 @@ func (op *AddForeignKey) Describe() string {
 //   - SET_NULL    → SET NULL
 //   - SET_DEFAULT → SET DEFAULT
 //   - DO_NOTHING  → NO ACTION
-func (op *AddForeignKey) Up(p providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *AddForeignKey) Up(p providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	onDelete := normalizeOnDelete(op.OnDelete)
 	onUpdate := normalizeOnDelete(op.OnUpdate)
 	return p.GenerateForeignKeyConstraint(op.Table, op.FieldName, op.ReferencedTable, op.ConstraintName, onDelete, onUpdate), nil
 }
 
 // Down generates the ALTER TABLE ... DROP CONSTRAINT SQL to remove the FK.
-func (op *AddForeignKey) Down(p providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *AddForeignKey) Down(p providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return p.GenerateDropForeignKeyConstraint(op.Table, op.ConstraintName), nil
 }
 
@@ -738,12 +738,12 @@ func (op *DropForeignKey) Describe() string {
 }
 
 // Up generates the ALTER TABLE ... DROP CONSTRAINT SQL.
-func (op *DropForeignKey) Up(p providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *DropForeignKey) Up(p providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return p.GenerateDropForeignKeyConstraint(op.Table, op.ConstraintName), nil
 }
 
 // Down reconstructs the ADD CONSTRAINT SQL by reading the FK's pre-drop state.
-func (op *DropForeignKey) Down(p providers.Provider, state *SchemaState, _ map[string]string) (string, error) {
+func (op *DropForeignKey) Down(p providers.Provider, state *SchemaState, _ map[string]string, _ string) (string, error) {
 	ts, exists := state.Tables[op.Table]
 	if !exists {
 		return "", fmt.Errorf("table %q not found in state", op.Table)
@@ -798,7 +798,7 @@ func (op *RunSQL) Describe() string {
 }
 
 // Up returns the ForwardSQL string, or empty string when SchemaOnly is set.
-func (op *RunSQL) Up(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *RunSQL) Up(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -806,7 +806,7 @@ func (op *RunSQL) Up(_ providers.Provider, _ *SchemaState, _ map[string]string) 
 }
 
 // Down returns the BackwardSQL string, or empty string when SchemaOnly is set.
-func (op *RunSQL) Down(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *RunSQL) Down(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	if op.SchemaOnly {
 		return "", nil
 	}
@@ -839,12 +839,12 @@ func (op *SetDefaults) IsDestructive() bool { return false }
 func (op *SetDefaults) Describe() string { return "Set schema defaults" }
 
 // Up returns empty string — SetDefaults emits no SQL.
-func (op *SetDefaults) Up(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *SetDefaults) Up(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return "", nil
 }
 
 // Down returns empty string — SetDefaults emits no SQL.
-func (op *SetDefaults) Down(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *SetDefaults) Down(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return "", nil
 }
 
@@ -877,12 +877,12 @@ func (op *SetTypeMappings) IsDestructive() bool { return false }
 func (op *SetTypeMappings) Describe() string { return "Set schema type mappings" }
 
 // Up returns empty string — SetTypeMappings emits no SQL.
-func (op *SetTypeMappings) Up(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *SetTypeMappings) Up(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return "", nil
 }
 
 // Down returns empty string — SetTypeMappings emits no SQL.
-func (op *SetTypeMappings) Down(_ providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *SetTypeMappings) Down(_ providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	return "", nil
 }
 
@@ -943,7 +943,7 @@ func (op *UpsertData) Describe() string {
 // DefaultRef values in rows are resolved through the defaults map: if the key
 // is present, the resolved SQL expression is emitted verbatim (not quoted); if
 // not, the DefaultRef string itself is used as a raw SQL expression.
-func (op *UpsertData) Up(p providers.Provider, _ *SchemaState, defaults map[string]string) (string, error) {
+func (op *UpsertData) Up(p providers.Provider, _ *SchemaState, defaults map[string]string, _ string) (string, error) {
 	if len(op.Rows) == 0 {
 		return "", nil
 	}
@@ -982,7 +982,7 @@ func formatUpsertValue(v any, defaults map[string]string) string {
 
 // Down generates DELETE statements that remove each upserted row by matching
 // on the ConflictKeys. Returns empty string when Rows or ConflictKeys is empty.
-func (op *UpsertData) Down(p providers.Provider, _ *SchemaState, _ map[string]string) (string, error) {
+func (op *UpsertData) Down(p providers.Provider, _ *SchemaState, _ map[string]string, _ string) (string, error) {
 	if len(op.Rows) == 0 || len(op.ConflictKeys) == 0 {
 		return "", nil
 	}

@@ -29,14 +29,15 @@ import "os"
 // Config holds database connection configuration for the migration binary.
 // All fields default to environment variables if not set explicitly.
 type Config struct {
-	DatabaseType string // postgresql, mysql, sqlserver, sqlite
-	DatabaseURL  string // full DSN — overrides individual fields if set
-	DBHost       string
-	DBPort       string
-	DBUser       string
-	DBPassword   string
-	DBName       string
-	DBSSLMode    string
+	DatabaseType  string // postgresql, mysql, sqlserver, sqlite
+	DatabaseURL   string // full DSN — overrides individual fields if set
+	DBHost        string
+	DBPort        string
+	DBUser        string
+	DBPassword    string
+	DBName        string
+	DBSSLMode     string
+	MigrationsDir string // path to migrations directory, for resolving external data files
 }
 
 // EnvOr returns the value of the named environment variable,

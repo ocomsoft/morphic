@@ -107,11 +107,11 @@ func TestUsageGuide_SetDefaults_NoSQL(t *testing.T) {
 	p := newPGProvider()
 	state := migrate.NewSchemaState()
 	op := &migrate.SetDefaults{Defaults: usageDefaults}
-	up, err := op.Up(p, state, nil)
+	up, err := op.Up(p, state, nil, "")
 	if err != nil || up != "" {
 		t.Errorf("SetDefaults.Up should return empty SQL, got %q err=%v", up, err)
 	}
-	down, err := op.Down(p, state, nil)
+	down, err := op.Down(p, state, nil, "")
 	if err != nil || down != "" {
 		t.Errorf("SetDefaults.Down should return empty SQL, got %q err=%v", down, err)
 	}
@@ -141,11 +141,11 @@ func TestUsageGuide_SetTypeMappings(t *testing.T) {
 func TestUsageGuide_SetTypeMappings_NoSQL(t *testing.T) {
 	state := migrate.NewSchemaState()
 	op := &migrate.SetTypeMappings{TypeMappings: usageTypeMappings}
-	up, err := op.Up(nil, state, nil)
+	up, err := op.Up(nil, state, nil, "")
 	if err != nil || up != "" {
 		t.Errorf("SetTypeMappings.Up should return empty SQL, got %q err=%v", up, err)
 	}
-	down, err := op.Down(nil, state, nil)
+	down, err := op.Down(nil, state, nil, "")
 	if err != nil || down != "" {
 		t.Errorf("SetTypeMappings.Down should return empty SQL, got %q err=%v", down, err)
 	}
@@ -186,7 +186,7 @@ func TestUsageGuide_UsersTable_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Up: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestUsageGuide_UsersTable_PostgreSQL_SQL(t *testing.T) {
 		t.Errorf("expected CURRENT_TIMESTAMP in SQL, got:\n%s", sql)
 	}
 	// Down is DROP TABLE
-	downSQL, err := op.Down(p, state, usageDefaults)
+	downSQL, err := op.Down(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Down: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestUsageGuide_ProductsTable_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Up: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestUsageGuide_CategoriesTable_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Up: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestUsageGuide_ProductCategories_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Up: %v", err)
 	}
@@ -385,7 +385,7 @@ func TestUsageGuide_AddOrdersTable_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("CreateTable.Up: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestUsageGuide_AddFields_PostgreSQL_SQL(t *testing.T) {
 		Table: "users",
 		Field: migrate.Field{Name: "phone", Type: "varchar", Length: 30, Nullable: true},
 	}
-	phoneSQL, err := phoneOp.Up(p, state, usageDefaults)
+	phoneSQL, err := phoneOp.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AddField(phone).Up: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestUsageGuide_AddFields_PostgreSQL_SQL(t *testing.T) {
 		Table: "users",
 		Field: migrate.Field{Name: "last_login_at", Type: "timestamp", Nullable: true},
 	}
-	loginSQL, err := loginOp.Up(p, state, usageDefaults)
+	loginSQL, err := loginOp.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AddField(last_login_at).Up: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestUsageGuide_AddFields_PostgreSQL_SQL(t *testing.T) {
 	}
 
 	// Down for phone must be DROP COLUMN
-	downSQL, err := phoneOp.Down(p, state, usageDefaults)
+	downSQL, err := phoneOp.Down(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AddField(phone).Down: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestUsageGuide_AddIndex_PostgreSQL_SQL(t *testing.T) {
 		},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AddIndex.Up: %v", err)
 	}
@@ -491,7 +491,7 @@ func TestUsageGuide_AddIndex_PostgreSQL_SQL(t *testing.T) {
 	}
 
 	// Down must be DROP INDEX
-	downSQL, err := op.Down(p, state, usageDefaults)
+	downSQL, err := op.Down(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AddIndex.Down: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestUsageGuide_AlterField_ExpandVarchar_PostgreSQL_SQL(t *testing.T) {
 		NewField: migrate.Field{Name: "status", Type: "varchar", Length: 100, Default: "default_status"},
 	}
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AlterField.Up: %v", err)
 	}
@@ -532,7 +532,7 @@ func TestUsageGuide_AlterField_ExpandVarchar_PostgreSQL_SQL(t *testing.T) {
 	}
 
 	// Down must restore the old definition
-	downSQL, err := op.Down(p, state, usageDefaults)
+	downSQL, err := op.Down(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("AlterField.Down: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestUsageGuide_SafeNotNull_RunSQL(t *testing.T) {
 		BackwardSQL: "",
 	}
 
-	sql, err := op.Up(nil, nil, nil)
+	sql, err := op.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Up: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestUsageGuide_SafeNotNull_RunSQL(t *testing.T) {
 		t.Errorf("expected UPDATE users SET phone in SQL, got:\n%s", sql)
 	}
 
-	back, err := op.Down(nil, nil, nil)
+	back, err := op.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Down: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestUsageGuide_DropField_IsDestructive(t *testing.T) {
 		{Name: "notes", Type: "text", Nullable: true},
 	}, nil)
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("DropField.Up: %v", err)
 	}
@@ -601,7 +601,7 @@ func TestUsageGuide_DropField_IsDestructive(t *testing.T) {
 	}
 
 	// Down must reconstruct ADD COLUMN
-	downSQL, err := op.Down(p, state, usageDefaults)
+	downSQL, err := op.Down(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("DropField.Down: %v", err)
 	}
@@ -628,7 +628,7 @@ func TestUsageGuide_DropTable_IsDestructive(t *testing.T) {
 		{Name: "id", Type: "serial", PrimaryKey: true},
 	}, nil)
 
-	sql, err := op.Up(p, state, usageDefaults)
+	sql, err := op.Up(p, state, usageDefaults, "")
 	if err != nil {
 		t.Fatalf("DropTable.Up: %v", err)
 	}
@@ -672,7 +672,7 @@ WHERE slug IN (
 		t.Errorf("TypeName = %q, want run_sql", op.TypeName())
 	}
 
-	sql, err := op.Up(nil, nil, nil)
+	sql, err := op.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Up: %v", err)
 	}
@@ -688,7 +688,7 @@ WHERE slug IN (
 		}
 	}
 
-	back, err := op.Down(nil, nil, nil)
+	back, err := op.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Down: %v", err)
 	}
@@ -736,7 +736,7 @@ COMMENT ON FUNCTION calculate_order_total(UUID)
 		BackwardSQL: `DROP FUNCTION IF EXISTS calculate_order_total(UUID);`,
 	}
 
-	sql, err := op.Up(nil, nil, nil)
+	sql, err := op.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Up: %v", err)
 	}
@@ -747,7 +747,7 @@ COMMENT ON FUNCTION calculate_order_total(UUID)
 		t.Errorf("expected RETURNS TABLE in SQL, got:\n%s", sql)
 	}
 
-	back, err := op.Down(nil, nil, nil)
+	back, err := op.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("RunSQL.Down: %v", err)
 	}
@@ -792,7 +792,7 @@ EXECUTE FUNCTION set_updated_at();`,
 	}
 
 	// Verify CREATE FUNCTION
-	fnSQL, err := createFnOp.Up(nil, nil, nil)
+	fnSQL, err := createFnOp.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("createFn.Up: %v", err)
 	}
@@ -804,7 +804,7 @@ EXECUTE FUNCTION set_updated_at();`,
 	}
 
 	// Verify TRIGGER on users
-	triggerSQL, err := attachUsersOp.Up(nil, nil, nil)
+	triggerSQL, err := attachUsersOp.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("attachUsers.Up: %v", err)
 	}
@@ -816,7 +816,7 @@ EXECUTE FUNCTION set_updated_at();`,
 	}
 
 	// Verify TRIGGER on orders
-	ordersSQL, err := attachOrdersOp.Up(nil, nil, nil)
+	ordersSQL, err := attachOrdersOp.Up(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("attachOrders.Up: %v", err)
 	}
@@ -825,7 +825,7 @@ EXECUTE FUNCTION set_updated_at();`,
 	}
 
 	// Verify Down operations
-	fnDown, err := createFnOp.Down(nil, nil, nil)
+	fnDown, err := createFnOp.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("createFn.Down: %v", err)
 	}
@@ -833,7 +833,7 @@ EXECUTE FUNCTION set_updated_at();`,
 		t.Errorf("expected DROP FUNCTION IF EXISTS set_updated_at, got:\n%s", fnDown)
 	}
 
-	usersDown, err := attachUsersOp.Down(nil, nil, nil)
+	usersDown, err := attachUsersOp.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("attachUsers.Down: %v", err)
 	}
@@ -841,7 +841,7 @@ EXECUTE FUNCTION set_updated_at();`,
 		t.Errorf("expected DROP TRIGGER IF EXISTS trg_users_updated_at ON users, got:\n%s", usersDown)
 	}
 
-	ordersDown, err := attachOrdersOp.Down(nil, nil, nil)
+	ordersDown, err := attachOrdersOp.Down(nil, nil, nil, "")
 	if err != nil {
 		t.Fatalf("attachOrders.Down: %v", err)
 	}

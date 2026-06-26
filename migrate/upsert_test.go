@@ -81,7 +81,7 @@ func TestUpsertData_Mutate(t *testing.T) {
 func TestUpsertData_Up_Empty(t *testing.T) {
 	op := &migrate.UpsertData{Table: "t", ConflictKeys: []string{"id"}, Rows: nil}
 	p := postgresql.New()
-	sql, err := op.Up(p, nil, nil)
+	sql, err := op.Up(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestUpsertData_Up_PostgreSQL(t *testing.T) {
 		},
 	}
 	p := postgresql.New()
-	sql, err := op.Up(p, nil, nil)
+	sql, err := op.Up(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestUpsertData_Up_SQLite(t *testing.T) {
 		},
 	}
 	p := sqlite.New()
-	sql, err := op.Up(p, nil, nil)
+	sql, err := op.Up(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestUpsertData_Down_PostgreSQL(t *testing.T) {
 		},
 	}
 	p := postgresql.New()
-	sql, err := op.Down(p, nil, nil)
+	sql, err := op.Down(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Down error: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestUpsertData_Down_PostgreSQL(t *testing.T) {
 func TestUpsertData_Down_EmptyRows(t *testing.T) {
 	op := &migrate.UpsertData{Table: "t", ConflictKeys: []string{"id"}, Rows: nil}
 	p := postgresql.New()
-	sql, err := op.Down(p, nil, nil)
+	sql, err := op.Down(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Down error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestUpsertData_Down_NoConflictKeys(t *testing.T) {
 		Rows:         []map[string]any{{"a": "b"}},
 	}
 	p := postgresql.New()
-	sql, err := op.Down(p, nil, nil)
+	sql, err := op.Down(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Down error: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestUpsertData_Up_DefaultRef_Resolved(t *testing.T) {
 	}
 	p := postgresql.New()
 	defaults := map[string]string{"uuid": "uuid_generate_v4()"}
-	sql, err := op.Up(p, nil, defaults)
+	sql, err := op.Up(p, nil, defaults, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -229,7 +229,7 @@ func TestUpsertData_Up_DefaultRef_Fallback(t *testing.T) {
 		},
 	}
 	p := postgresql.New()
-	sql, err := op.Up(p, nil, nil) // no defaults map
+	sql, err := op.Up(p, nil, nil, "") // no defaults map
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestUpsertData_Up_DefaultRef_NilDefaults(t *testing.T) {
 	}
 	p := postgresql.New()
 	// Must not panic with nil defaults.
-	sql, err := op.Up(p, nil, nil)
+	sql, err := op.Up(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestUpsertData_Up_ColumnOrder(t *testing.T) {
 		},
 	}
 	p := postgresql.New()
-	sql, err := op.Up(p, nil, nil)
+	sql, err := op.Up(p, nil, nil, "")
 	if err != nil {
 		t.Fatalf("Up error: %v", err)
 	}

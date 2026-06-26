@@ -43,7 +43,7 @@ func TestCreateTable_Up(t *testing.T) {
 			{Name: "email", Type: "varchar", Length: 255},
 		},
 	}
-	sql, err := op.Up(p, state, nil)
+	sql, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestCreateTable_Down(t *testing.T) {
 	p := sqlite.New()
 	state := migrate.NewSchemaState()
 	op := &migrate.CreateTable{Name: "users", Fields: []migrate.Field{{Name: "id", Type: "integer"}}}
-	sql, err := op.Down(p, state, nil)
+	sql, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -79,11 +79,11 @@ func TestAddField_UpDown(t *testing.T) {
 		Table: "users",
 		Field: migrate.Field{Name: "phone", Type: "varchar", Length: 20, Nullable: true},
 	}
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil || upSQL == "" {
 		t.Fatalf("Up: err=%v sql=%q", err, upSQL)
 	}
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil || downSQL == "" {
 		t.Fatalf("Down: err=%v sql=%q", err, downSQL)
 	}
@@ -121,11 +121,11 @@ func TestRunSQL_UpDown(t *testing.T) {
 		ForwardSQL:  "UPDATE posts SET slug = 'x'",
 		BackwardSQL: "UPDATE posts SET slug = NULL",
 	}
-	sql, _ := op.Up(nil, nil, nil)
+	sql, _ := op.Up(nil, nil, nil, "")
 	if sql != "UPDATE posts SET slug = 'x'" {
 		t.Fatalf("expected forward SQL, got %q", sql)
 	}
-	back, _ := op.Down(nil, nil, nil)
+	back, _ := op.Down(nil, nil, nil, "")
 	if back != "UPDATE posts SET slug = NULL" {
 		t.Fatalf("expected backward SQL, got %q", back)
 	}
@@ -168,7 +168,7 @@ func TestDropField_Down_ReconstructsFromState(t *testing.T) {
 		{Name: "email", Type: "varchar", Length: 255},
 	}, nil)
 	op := &migrate.DropField{Table: "users", Field: "email"}
-	sql, err := op.Down(p, state, nil)
+	sql, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestDropTable_SchemaOnly_NoSQL(t *testing.T) {
 
 	op := &migrate.DropTable{Name: "users", SchemaOnly: true}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestDropTable_SchemaOnly_NoSQL(t *testing.T) {
 		t.Errorf("expected empty Up SQL with SchemaOnly, got %q", upSQL)
 	}
 
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestDropField_SchemaOnly_NoSQL(t *testing.T) {
 
 	op := &migrate.DropField{Table: "users", Field: "phone", SchemaOnly: true}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestDropField_SchemaOnly_NoSQL(t *testing.T) {
 		t.Errorf("expected empty Up SQL with SchemaOnly, got %q", upSQL)
 	}
 
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestCreateTable_SchemaOnly_NoSQL(t *testing.T) {
 		SchemaOnly: true,
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestCreateTable_SchemaOnly_NoSQL(t *testing.T) {
 		t.Errorf("expected empty Up SQL with SchemaOnly, got %q", upSQL)
 	}
 
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestAddField_SchemaOnly_NoSQL(t *testing.T) {
 		SchemaOnly: true,
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestAddField_SchemaOnly_NoSQL(t *testing.T) {
 		t.Errorf("expected empty Up SQL with SchemaOnly, got %q", upSQL)
 	}
 
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -382,11 +382,11 @@ func TestSetDefaults_UpDown(t *testing.T) {
 	p := sqlite.New()
 	state := migrate.NewSchemaState()
 	op := &migrate.SetDefaults{Defaults: map[string]string{"uuid": "uuid_generate_v4()"}}
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil || upSQL != "" {
 		t.Errorf("SetDefaults.Up should return empty SQL, got %q err=%v", upSQL, err)
 	}
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil || downSQL != "" {
 		t.Errorf("SetDefaults.Down should return empty SQL, got %q err=%v", downSQL, err)
 	}
@@ -413,11 +413,11 @@ func TestSetTypeMappings_Mutate(t *testing.T) {
 func TestSetTypeMappings_UpDown(t *testing.T) {
 	state := migrate.NewSchemaState()
 	op := &migrate.SetTypeMappings{TypeMappings: map[string]string{"float": "DOUBLE PRECISION"}}
-	upSQL, err := op.Up(nil, state, nil)
+	upSQL, err := op.Up(nil, state, nil, "")
 	if err != nil || upSQL != "" {
 		t.Errorf("SetTypeMappings.Up should return empty SQL, got %q err=%v", upSQL, err)
 	}
-	downSQL, err := op.Down(nil, state, nil)
+	downSQL, err := op.Down(nil, state, nil, "")
 	if err != nil || downSQL != "" {
 		t.Errorf("SetTypeMappings.Down should return empty SQL, got %q err=%v", downSQL, err)
 	}
@@ -459,7 +459,7 @@ func TestDropTable_Down_ResolvesDefaults(t *testing.T) {
 		t.Fatalf("AddTable: %v", err)
 	}
 	op := &migrate.DropTable{Name: "items"}
-	sqlStr, err := op.Down(p, state, defaults)
+	sqlStr, err := op.Down(p, state, defaults, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestCreateTable_Up_ResolvesDefaults(t *testing.T) {
 			{Name: "id", Type: "uuid", Default: "uuid", PrimaryKey: true},
 		},
 	}
-	sqlStr, err := op.Up(p, state, defaults)
+	sqlStr, err := op.Up(p, state, defaults, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestAddForeignKey_UpDown(t *testing.T) {
 		OnDelete:        "CASCADE",
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -529,7 +529,7 @@ func TestAddForeignKey_UpDown(t *testing.T) {
 		t.Fatal("expected FK in state after Mutate")
 	}
 
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -557,7 +557,7 @@ func TestDropForeignKey_UpDown(t *testing.T) {
 	}
 
 	// Up: DROP CONSTRAINT
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestDropForeignKey_UpDown(t *testing.T) {
 	}
 
 	// Down: reads state to reconstruct ADD CONSTRAINT (state still has FK before Mutate)
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestAddForeignKey_OnUpdate(t *testing.T) {
 		OnUpdate:        "SET NULL",
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -625,7 +625,7 @@ func TestAddForeignKey_ConstraintNameUsed(t *testing.T) {
 		OnDelete:        "CASCADE",
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -650,7 +650,7 @@ func TestAddForeignKey_OnUpdateNormalization(t *testing.T) {
 		OnUpdate:        "SET_NULL",
 	}
 
-	upSQL, err := op.Up(p, state, nil)
+	upSQL, err := op.Up(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Up: %v", err)
 	}
@@ -675,7 +675,7 @@ func TestDropForeignKey_Down_WithOnUpdate(t *testing.T) {
 	}
 
 	// Down should reconstruct the FK with both OnDelete and OnUpdate
-	downSQL, err := op.Down(p, state, nil)
+	downSQL, err := op.Down(p, state, nil, "")
 	if err != nil {
 		t.Fatalf("Down: %v", err)
 	}

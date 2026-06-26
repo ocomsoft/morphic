@@ -344,10 +344,9 @@ func promptGoMigDecisions(diff *yamlpkg.SchemaDiff) (map[int]yamlpkg.PromptRespo
 	return decisions, nil
 }
 
-// queryDAG loads the migrations directory with the yaegi interpreter and
-// returns the current migration graph state. No Go toolchain is invoked; the
-// migration .go files are interpreted in-process and registered with a fresh
-// *migrate.Registry, then BuildGraph + ToDAGOutput run directly.
+// queryDAG loads the migrations directory and returns the current migration
+// graph state. Migration .star files are interpreted in-process and registered
+// with a fresh *migrate.Registry, then BuildGraph + ToDAGOutput run directly.
 //
 // The verbose parameter is preserved for API compatibility with callers but
 // has no effect now that no build step takes place.

@@ -38,8 +38,8 @@ var fromMakemigrationsOutputDir string
 
 var fromMakemigrationsCmd = &cobra.Command{
 	Use:     "from-makemigrations [migrations-dir]",
-	Short:   "Convert Go (Yaegi) migrations to Starlark format",
-	Long:    `Reads .go migration files from the old makemigrations format via Yaegi, converts them to .star format, and writes the output to the specified directory.`,
+	Short:   "Convert legacy Go migrations to Starlark format",
+	Long:    `Reads legacy .go migration files from the old makemigrations format, converts them to .star format, and writes the output to the specified directory.`,
 	GroupID: "convert",
 	Args:    cobra.ExactArgs(1),
 	RunE:    runFromMakemigrations,

@@ -33,17 +33,16 @@ import (
 	"github.com/ocomsoft/morphic/migrate"
 )
 
-// migrateCmd interprets the migrations module with yaegi and runs the embedded
+// migrateCmd loads the migrations directory and runs the embedded
 // migrate.App in-process. DisableFlagParsing passes every argument straight to
 // the App, so each of its subcommands works unchanged.
 var migrateCmd = &cobra.Command{
 	Use:     "migrate [args...]",
 	GroupID: "runtime",
-	Short:   "Run migrations in-process via the yaegi interpreter",
-	Long: `Load the migrations directory with the yaegi interpreter and run the embedded
-migrate App with the provided arguments. No Go toolchain is invoked — the
-migration .go files are interpreted in-process. All subcommands the App
-supports are available:
+	Short:   "Run migrations in-process via the Starlark interpreter",
+	Long: `Load the migrations directory and run the embedded migrate App with the
+provided arguments. Migration .star files are interpreted in-process via the
+Starlark-Go interpreter. All subcommands the App supports are available:
 
   morphic migrate up
   morphic migrate up --to 0005_add_index
@@ -64,9 +63,9 @@ func init() {
 	rootCmd.AddCommand(migrateCmd)
 }
 
-// ExecuteMigrate loads migrationsDir with the yaegi interpreter and runs the
-// embedded migrate.App with the provided args. defaultURL is used as the
-// fallback database URL when the DATABASE_URL env var is not set.
+// ExecuteMigrate loads migrationsDir and runs the embedded migrate.App with the
+// provided args. defaultURL is used as the fallback database URL when the
+// DATABASE_URL env var is not set.
 func ExecuteMigrate(migrationsDir string, defaultURL string, args []string) error {
 	reg, err := interp.LoadRegistry(migrationsDir)
 	if err != nil {

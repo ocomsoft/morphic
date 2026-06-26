@@ -137,6 +137,34 @@ func TestLoadJSONLRows_SkipsEmptyLines(t *testing.T) {
 	}
 }
 
+// TestLoadJSONLRows_SkipsCommentLines verifies that lines starting with # are
+// ignored, allowing comments in JSONL files.
+func TestLoadJSONLRows_SkipsCommentLines(t *testing.T) {
+	content := `# Countries seed data
+{"code": "AU", "name": "Australia"}
+# New Zealand added 2026-06-26
+{"code": "NZ", "name": "New Zealand"}
+`
+	path := writeTemp(t, content)
+
+	rows, err := loadJSONLRows(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+
+	if rows[0]["code"] != "AU" {
+		t.Errorf("row[0].code: expected AU, got %v", rows[0]["code"])
+	}
+
+	if rows[1]["code"] != "NZ" {
+		t.Errorf("row[1].code: expected NZ, got %v", rows[1]["code"])
+	}
+}
+
 // TestLoadJSONLRows_FileNotFound verifies that a non-existent file returns an error.
 func TestLoadJSONLRows_FileNotFound(t *testing.T) {
 	_, err := loadJSONLRows("/nonexistent/path/to/file.jsonl")

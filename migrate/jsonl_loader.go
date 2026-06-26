@@ -36,7 +36,8 @@ import (
 )
 
 // loadJSONLRows reads a JSONL file (one JSON object per line) and returns
-// the rows as a slice of maps. Empty lines are skipped.
+// the rows as a slice of maps. Empty lines and comment lines (starting
+// with #) are skipped.
 // Numeric values are preserved with full precision: integers are returned
 // as int64 and floating-point numbers as float64.
 func loadJSONLRows(path string) ([]map[string]any, error) {
@@ -58,7 +59,7 @@ func loadJSONLRows(path string) ([]map[string]any, error) {
 		lineNum++
 
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 

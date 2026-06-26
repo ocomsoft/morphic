@@ -253,9 +253,10 @@ migration(
 
 ### JSONL Format
 
-Each file contains one JSON object per line, with keys sorted alphabetically:
+Each file contains one JSON object per line, with keys sorted alphabetically. Lines starting with `#` are treated as comments and ignored:
 
 ```jsonl
+# Country seed data
 {"code": "AU", "name": "Australia", "population": 26000000}
 {"code": "NZ", "name": "New Zealand", "population": 5000000}
 ```

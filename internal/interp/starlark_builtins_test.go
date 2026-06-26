@@ -585,3 +585,82 @@ func TestStarlarkBuiltin_AutoCreateRejectedOnNonDatetime(t *testing.T) {
 		})
 	}
 }
+
+func TestStarlarkBuiltin_UpsertData_RowsFile(t *testing.T) {
+	b := execStar(t, `
+migration(
+    name = "0002_seed",
+    dependencies = ["0001_initial"],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+            rows_file = "0002_seed_countries.jsonl",
+        ),
+    ],
+)
+`)
+	m := b.Collected()
+	if m == nil {
+		t.Fatal("no migration collected")
+	}
+	if len(m.Operations) != 1 {
+		t.Fatalf("expected 1 operation, got %d", len(m.Operations))
+	}
+	ud, ok := m.Operations[0].(*migrate.UpsertData)
+	if !ok {
+		t.Fatalf("expected *migrate.UpsertData, got %T", m.Operations[0])
+	}
+	if ud.RowsFile != "0002_seed_countries.jsonl" {
+		t.Errorf("expected RowsFile='0002_seed_countries.jsonl', got %q", ud.RowsFile)
+	}
+	if len(ud.Rows) != 0 {
+		t.Errorf("expected empty Rows when rows_file is set, got %d rows", len(ud.Rows))
+	}
+}
+
+func TestStarlarkBuiltin_UpsertData_BothRowsAndRowsFileError(t *testing.T) {
+	b := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+	_, err := starlark.ExecFileOptions(
+		&syntax.FileOptions{}, thread, "test.star",
+		[]byte(`
+migration(
+    name = "0002_seed",
+    dependencies = [],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+            rows = [{"code": "AU"}],
+            rows_file = "data.jsonl",
+        ),
+    ],
+)
+`), b.Env())
+	if err == nil {
+		t.Fatal("expected error when both rows and rows_file are set")
+	}
+}
+
+func TestStarlarkBuiltin_UpsertData_NeitherRowsNorRowsFileError(t *testing.T) {
+	b := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+	_, err := starlark.ExecFileOptions(
+		&syntax.FileOptions{}, thread, "test.star",
+		[]byte(`
+migration(
+    name = "0002_seed",
+    dependencies = [],
+    operations = [
+        upsert_data(
+            table = "countries",
+            conflict_keys = ["code"],
+        ),
+    ],
+)
+`), b.Env())
+	if err == nil {
+		t.Fatal("expected error when neither rows nor rows_file is set")
+	}
+}

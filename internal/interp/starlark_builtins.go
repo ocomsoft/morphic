@@ -720,20 +720,32 @@ func (b *StarlarkBuiltins) builtinDropForeignKey(_ *starlark.Thread, _ *starlark
 	return &opValue{op: &migrate.DropForeignKey{Table: table, ConstraintName: constraintName, IgnoreErrors: ignoreErrors}}, nil
 }
 
-// builtinUpsertData implements upsert_data(table, conflict_keys, rows) → opValue.
-// rows is a list of dicts (each produced by row()).
+// builtinUpsertData implements upsert_data(table, conflict_keys, rows?, rows_file?) → opValue.
+// Either rows (a list of dicts) or rows_file (a string path) must be provided, not both.
 func (b *StarlarkBuiltins) builtinUpsertData(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
 		table        string
 		conflictKeys *starlark.List
 		rows         *starlark.List
+		rowsFile     string
 	)
 	if err := starlark.UnpackArgs("upsert_data", args, kwargs,
 		"table", &table,
 		"conflict_keys", &conflictKeys,
-		"rows", &rows,
+		"rows?", &rows,
+		"rows_file?", &rowsFile,
 	); err != nil {
 		return nil, err
+	}
+
+	hasRows := rows != nil && rows.Len() > 0
+	hasRowsFile := rowsFile != ""
+
+	if hasRows && hasRowsFile {
+		return nil, fmt.Errorf("upsert_data: cannot specify both rows and rows_file")
+	}
+	if !hasRows && !hasRowsFile {
+		return nil, fmt.Errorf("upsert_data: must specify either rows or rows_file")
 	}
 
 	ck, err := stringListToSlice(conflictKeys)
@@ -742,7 +754,7 @@ func (b *StarlarkBuiltins) builtinUpsertData(_ *starlark.Thread, _ *starlark.Bui
 	}
 
 	var goRows []map[string]any
-	if rows != nil {
+	if hasRows {
 		for i := 0; i < rows.Len(); i++ {
 			d, ok := rows.Index(i).(*starlark.Dict)
 			if !ok {
@@ -756,6 +768,7 @@ func (b *StarlarkBuiltins) builtinUpsertData(_ *starlark.Thread, _ *starlark.Bui
 		Table:        table,
 		ConflictKeys: ck,
 		Rows:         goRows,
+		RowsFile:     rowsFile,
 	}}, nil
 }
 

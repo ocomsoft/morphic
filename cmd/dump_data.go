@@ -200,11 +200,21 @@ func runDumpData(_ *cobra.Command, args []string) error {
 			fmt.Printf("  %d rows fetched\n", len(rows))
 		}
 
+		if len(rows) == 0 {
+			fmt.Printf("Skipping table %q: no rows found\n", tableName)
+			continue
+		}
+
 		tables = append(tables, codegen.TableDump{
 			Table:        tableName,
 			ConflictKeys: conflictKeys,
 			Rows:         rows,
 		})
+	}
+
+	if len(tables) == 0 {
+		fmt.Println("No data found in any table — nothing to generate.")
+		return nil
 	}
 
 	// Build migration name.

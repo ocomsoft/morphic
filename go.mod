@@ -14,7 +14,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/traefik/yaegi v0.16.1
-	go.starlark.net v0.0.0-20260613233743-8ba36ccb83fb
+	go.starlark.net v0.0.0-20260630144053-529d8e869a14
 	golang.org/x/mod v0.37.0
 	golang.org/x/text v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -44,7 +44,7 @@ require (
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.4.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect

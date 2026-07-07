@@ -39,6 +39,10 @@ type RunOptions struct {
 	// WarnOnMissingDrop causes drop operations that fail because the target
 	// object does not exist to print a warning and continue rather than stop.
 	WarnOnMissingDrop bool
+	// FakeInitial causes migrations marked Initial=true to be faked (recorded
+	// as applied without running SQL) when all their CreateTable tables and
+	// columns already exist in the live database.
+	FakeInitial bool
 }
 
 // Runner executes migrations against a database in topological order.
@@ -105,6 +109,31 @@ func (r *Runner) Up(to string, opts RunOptions) error {
 		if applied[mig.Name] {
 			continue
 		}
+
+		// Check if this initial migration can be faked.
+		if opts.FakeInitial && mig.Initial {
+			canFake, err := r.shouldFakeInitial(mig)
+			if err != nil {
+				return fmt.Errorf("checking fake-initial for %q: %w", mig.Name, err)
+			}
+			if canFake {
+				r.printf("Applying %s... faked (tables already exist)\n", mig.Name)
+				if err := r.recorder.RecordApplied(mig.Name); err != nil {
+					return fmt.Errorf("recording faked migration %q: %w", mig.Name, err)
+				}
+				// Replay state mutations so subsequent migrations see the schema
+				for _, op := range mig.Operations {
+					if err := op.Mutate(state); err != nil {
+						return fmt.Errorf("replaying state for faked %q: %w", mig.Name, err)
+					}
+				}
+				if to != "" && mig.Name == to {
+					break
+				}
+				continue
+			}
+		}
+
 		r.printf("Applying %s...", mig.Name)
 		if err := r.applyMigration(mig, state, opts); err != nil {
 			r.printf(" FAILED\n")
@@ -116,6 +145,57 @@ func (r *Runner) Up(to string, opts RunOptions) error {
 		}
 	}
 	return nil
+}
+
+// extractExpectedTables walks a migration's operations and returns a map of
+// table name → expected column names for all CreateTable operations.
+func extractExpectedTables(mig *Migration) map[string][]string {
+	tables := make(map[string][]string)
+	for _, op := range mig.Operations {
+		ct, ok := op.(*CreateTable)
+		if !ok {
+			continue
+		}
+		var cols []string
+		for _, f := range ct.Fields {
+			cols = append(cols, f.Name)
+		}
+		tables[ct.Name] = cols
+	}
+	return tables
+}
+
+// shouldFakeInitial checks whether an initial migration can be faked by
+// verifying that all its CreateTable tables exist in the live database with
+// the expected columns present. Extra columns in the live DB are allowed.
+func (r *Runner) shouldFakeInitial(mig *Migration) (bool, error) {
+	expected := extractExpectedTables(mig)
+	if len(expected) == 0 {
+		return false, nil
+	}
+
+	for tableName, expectedCols := range expected {
+		liveCols, err := r.provider.TableColumns(r.db, tableName)
+		if err != nil {
+			return false, fmt.Errorf("checking table %q: %w", tableName, err)
+		}
+		if liveCols == nil {
+			return false, nil
+		}
+
+		liveSet := make(map[string]bool, len(liveCols))
+		for _, c := range liveCols {
+			liveSet[c] = true
+		}
+
+		for _, col := range expectedCols {
+			if !liveSet[col] {
+				return false, nil
+			}
+		}
+	}
+
+	return true, nil
 }
 
 // Down rolls back migrations. If steps > 0, rolls back that many.

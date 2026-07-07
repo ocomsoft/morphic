@@ -111,15 +111,20 @@ func (a *App) buildDAGCommand() *cobra.Command {
 func (a *App) buildUpCommand() *cobra.Command {
 	var toMigration string
 	var warnOnMissingDrop bool
+	var fakeInitial bool
 	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Apply pending migrations",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return a.runUp(toMigration, RunOptions{WarnOnMissingDrop: warnOnMissingDrop})
+			return a.runUp(toMigration, RunOptions{
+				WarnOnMissingDrop: warnOnMissingDrop,
+				FakeInitial:       fakeInitial,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&toMigration, "to", "", "Apply up to this migration name")
 	cmd.Flags().BoolVar(&warnOnMissingDrop, "warn-on-missing-drop", false, "Warn and continue when a drop fails because the object does not exist")
+	cmd.Flags().BoolVar(&fakeInitial, "fake-initial", false, "Fake initial migrations if their tables already exist in the database")
 	return cmd
 }
 

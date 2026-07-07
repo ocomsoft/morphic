@@ -28,6 +28,7 @@ import (
 	"database/sql"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -891,5 +892,232 @@ func TestNewRunner_NilSafe(t *testing.T) {
 	runner := migrate.NewRunner(g, p, db, recorder, nil, "")
 	if runner == nil {
 		t.Fatal("expected non-nil Runner")
+	}
+}
+
+func TestUp_FakeInitial_AllTablesExist(t *testing.T) {
+	db := openTestDB(t)
+
+	// Pre-create tables that the migration would create
+	_, err := db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_initial",
+		Initial: true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	if err := runner.Up("", migrate.RunOptions{FakeInitial: true}); err != nil {
+		t.Fatalf("Up with FakeInitial: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "faked (tables already exist)") {
+		t.Errorf("expected 'faked' message, got: %s", buf.String())
+	}
+
+	applied, _ := recorder.GetApplied()
+	if !applied["0001_initial"] {
+		t.Error("expected 0001_initial to be recorded as applied")
+	}
+}
+
+func TestUp_FakeInitial_TableMissing(t *testing.T) {
+	db := openTestDB(t)
+
+	// Do NOT pre-create the table — migration should apply normally
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_initial",
+		Initial: true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	if err := runner.Up("", migrate.RunOptions{FakeInitial: true}); err != nil {
+		t.Fatalf("Up with FakeInitial: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "done") {
+		t.Errorf("expected 'done' message (normal apply), got: %s", buf.String())
+	}
+}
+
+func TestUp_FakeInitial_ColumnMissing(t *testing.T) {
+	db := openTestDB(t)
+
+	// Create table with only id column, missing email
+	_, err := db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_initial",
+		Initial: true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	// Column missing → should apply normally, which will fail since table exists
+	// but with different schema. The important thing is it does NOT fake it.
+	_ = runner.Up("", migrate.RunOptions{FakeInitial: true})
+
+	// We expect either an error (table already exists) or normal apply — NOT a fake
+	output := buf.String()
+	if strings.Contains(output, "faked") {
+		t.Error("should NOT fake when expected columns are missing")
+	}
+}
+
+func TestUp_FakeInitial_NonInitialMigration(t *testing.T) {
+	db := openTestDB(t)
+
+	// Pre-create the table
+	_, err := db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_add_users",
+		Initial: false, // NOT initial
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	// Non-initial migration should NOT be faked even with --fake-initial
+	_ = runner.Up("", migrate.RunOptions{FakeInitial: true})
+
+	output := buf.String()
+	if strings.Contains(output, "faked") {
+		t.Error("should NOT fake non-initial migrations")
+	}
+}
+
+func TestUp_FakeInitial_ExtraColumnsOK(t *testing.T) {
+	db := openTestDB(t)
+
+	// Table has extra columns not in migration — should still fake
+	_, err := db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, extra_col TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_initial",
+		Initial: true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	if err := runner.Up("", migrate.RunOptions{FakeInitial: true}); err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "faked") {
+		t.Errorf("expected fake with extra columns, got: %s", buf.String())
 	}
 }

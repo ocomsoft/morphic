@@ -45,6 +45,9 @@ func ConvertMigrationToStarlark(m *migrate.Migration) (string, error) {
 	b.WriteString("migration(\n")
 	fmt.Fprintf(&b, "    name = %q,\n", m.Name)
 	fmt.Fprintf(&b, "    dependencies = [%s],\n", formatStarlarkDepsList(m.Dependencies))
+	if m.Initial {
+		b.WriteString("    initial = True,\n")
+	}
 	b.WriteString("    operations = [\n")
 
 	for _, op := range m.Operations {

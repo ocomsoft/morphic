@@ -89,7 +89,7 @@ The `--format json` output is used internally by `morphic generate` to reconstru
 Apply all pending migrations in topological order.
 
 ```
-./migrations/migrate up [--to <migration-name>] [--warn-on-missing-drop]
+./migrations/migrate up [--to <migration-name>] [--warn-on-missing-drop] [--fake-initial]
 ```
 
 **Flags:**
@@ -98,6 +98,7 @@ Apply all pending migrations in topological order.
 |------|---------|-------------|
 | `--to` | (none) | Stop after applying the named migration |
 | `--warn-on-missing-drop` | `false` | Warn and continue when a `DROP TABLE`, `DROP COLUMN`, or `DROP INDEX` fails because the object does not exist |
+| `--fake-initial` | `false` | Fake initial migrations if their tables already exist in the database |
 
 **Examples:**
 
@@ -121,6 +122,51 @@ Applying 0003_add_index... done
 ```
 
 If a migration fails, it prints `FAILED` and returns a non-zero exit code. Migrations already applied are skipped automatically.
+
+---
+
+## Adopting an Existing Database (`--fake-initial`)
+
+When adopting morphic on a database that already has tables, use `--fake-initial` to skip initial migrations whose tables already exist.
+
+### How It Works
+
+1. Mark your first migration as initial:
+
+```python
+migration(
+    name = "0001_initial",
+    dependencies = [],
+    initial = True,
+    operations = [
+        create_table("users", ...),
+        create_table("orders", ...),
+    ],
+)
+```
+
+2. Run with `--fake-initial`:
+
+```bash
+morphic migrate up --fake-initial
+```
+
+3. For each migration with `initial = True`, morphic checks if all the `create_table` tables exist in the live database with the expected columns. If they do, the migration is faked (recorded as applied without running SQL). If any table or column is missing, the migration runs normally.
+
+### Verification
+
+The check verifies:
+- All tables from `create_table` operations exist
+- Each table has all the expected column names
+
+Extra columns in the live database are allowed — the check is lenient. Type and index verification is not performed; use `morphic db-diff` for full schema comparison.
+
+### Example Output
+
+```
+Applying 0001_initial... faked (tables already exist)
+Applying 0002_add_profiles... done
+```
 
 ---
 

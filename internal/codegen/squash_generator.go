@@ -60,6 +60,14 @@ func (g *SquashGenerator) GenerateStarlarkSquash(
 	}
 	fmt.Fprintf(&b, "    replaces = [%s],\n", strings.Join(replaceStrs, ", "))
 
+	// Preserve initial flag if any squashed migration was initial
+	for _, mig := range migrations {
+		if mig.Initial {
+			b.WriteString("    initial = True,\n")
+			break
+		}
+	}
+
 	b.WriteString("    operations = [\n")
 	for _, mig := range migrations {
 		for _, op := range mig.Operations {

@@ -171,6 +171,47 @@ func TestConvertMigrationToStarlark_UpsertDataWithRowsFile(t *testing.T) {
 	}
 }
 
+func TestConvertMigrationToStarlark_InitialTrue(t *testing.T) {
+	m := &migrate.Migration{
+		Name:         "0001_initial",
+		Dependencies: []string{},
+		Initial:      true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+				},
+			},
+		},
+	}
+
+	src, err := codegen.ConvertMigrationToStarlark(m)
+	if err != nil {
+		t.Fatalf("ConvertMigrationToStarlark: %v", err)
+	}
+	if !strings.Contains(src, "initial = True") {
+		t.Errorf("expected 'initial = True' in output, got:\n%s", src)
+	}
+}
+
+func TestConvertMigrationToStarlark_InitialFalse(t *testing.T) {
+	m := &migrate.Migration{
+		Name:         "0002_add_field",
+		Dependencies: []string{"0001_add_base_tables"},
+		Initial:      false,
+		Operations:   []migrate.Operation{},
+	}
+
+	src, err := codegen.ConvertMigrationToStarlark(m)
+	if err != nil {
+		t.Fatalf("ConvertMigrationToStarlark: %v", err)
+	}
+	if strings.Contains(src, "initial") {
+		t.Errorf("should not contain 'initial' when false, got:\n%s", src)
+	}
+}
+
 // TestConvertAirRadiators_AllFiles loads the converted AirRadiators .star files
 // if the output directory exists (from a prior convert run).
 func TestConvertAirRadiators_AllFiles(t *testing.T) {

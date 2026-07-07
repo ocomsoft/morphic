@@ -26,6 +26,7 @@ SOFTWARE.
 package ydb
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -406,6 +407,11 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	sb.WriteString(";")
 
 	return sb.String()
+}
+
+// TableColumns is not yet implemented for YDB.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for YDB")
 }
 
 // GetDatabaseSchema extracts schema information from a YDB database

@@ -24,6 +24,8 @@ SOFTWARE.
 package providers
 
 import (
+	"database/sql"
+
 	"github.com/ocomsoft/morphic/internal/types"
 )
 
@@ -74,6 +76,10 @@ type Provider interface {
 	// Used by the runner during rollback to skip re-creating objects that are already present
 	// (e.g. after a partial rollback left the database in an intermediate state).
 	IsAlreadyExistsError(err error) bool
+	// TableColumns returns the column names for the given table in the database.
+	// Returns nil, nil if the table does not exist (not an error).
+	// Returns nil, err on query failure or if this provider does not support introspection.
+	TableColumns(db *sql.DB, tableName string) ([]string, error)
 
 	// GenerateUpsert generates a database-appropriate upsert statement for one or more
 	// rows. columns is the ordered list of column names; valueLiterals is a parallel

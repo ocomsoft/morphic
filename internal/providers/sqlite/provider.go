@@ -26,6 +26,7 @@ SOFTWARE.
 package sqlite
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -552,6 +553,36 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	return sb.String()
+}
+
+// TableColumns returns the column names for the given table using PRAGMA table_info.
+// Returns nil, nil if the table does not exist.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	query := fmt.Sprintf("PRAGMA table_info(%s)", p.QuoteName(tableName))
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("querying columns for table %q: %w", tableName, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var columns []string
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); err != nil {
+			return nil, fmt.Errorf("scanning column info: %w", err)
+		}
+		columns = append(columns, name)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating columns: %w", err)
+	}
+
+	return columns, nil
 }
 
 // GetDatabaseSchema extracts schema information from a SQLite database

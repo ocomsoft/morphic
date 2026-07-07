@@ -26,6 +26,7 @@ SOFTWARE.
 package starrocks
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -437,6 +438,11 @@ func (p *Provider) GenerateIndexes(schema *types.Schema) string {
 // GenerateForeignKeyConstraints returns a no-op comment because StarRocks does not support foreign key constraints.
 func (p *Provider) GenerateForeignKeyConstraints(schema *types.Schema, junctionTables []types.Table) string {
 	return "-- StarRocks doesn't support foreign key constraints;"
+}
+
+// TableColumns is not yet implemented for StarRocks.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for StarRocks")
 }
 
 // GetDatabaseSchema extracts schema information from a StarRocks database

@@ -26,6 +26,7 @@ SOFTWARE.
 package mysql
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -487,6 +488,11 @@ func (p *Provider) GenerateForeignKeyConstraints(schema *types.Schema, junctionT
 		return ""
 	}
 	return strings.Join(constraints, "\n")
+}
+
+// TableColumns is not yet implemented for MySQL.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for MySQL")
 }
 
 // GetDatabaseSchema extracts schema information from a MySQL database

@@ -26,6 +26,7 @@ SOFTWARE.
 package auroradsql
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -452,6 +453,11 @@ func (p *Provider) GenerateForeignKeyConstraints(schema *types.Schema, junctionT
 	}
 
 	return strings.Join(constraints, "\n")
+}
+
+// TableColumns is not yet implemented for Aurora DSQL.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for Aurora DSQL")
 }
 
 // GetDatabaseSchema extracts schema information from an Aurora DSQL database

@@ -26,6 +26,7 @@ SOFTWARE.
 package clickhouse
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -449,6 +450,11 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	sb.WriteString(";")
 
 	return sb.String()
+}
+
+// TableColumns is not yet implemented for ClickHouse.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for ClickHouse")
 }
 
 // GetDatabaseSchema extracts schema information from a ClickHouse database

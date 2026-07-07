@@ -24,9 +24,12 @@ SOFTWARE.
 package sqlite
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
+
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 
 	"github.com/ocomsoft/morphic/internal/types"
 )
@@ -283,5 +286,51 @@ func TestProvider_GenerateAddColumn_PrimaryKey(t *testing.T) {
 	}
 	if !strings.Contains(got, `"id"`) {
 		t.Errorf("GenerateAddColumn() should contain quoted field name, got: %s", got)
+	}
+}
+
+func TestTableColumns_ExistingTable(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, name TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := New()
+	cols, err := p.TableColumns(db, "users")
+	if err != nil {
+		t.Fatalf("TableColumns: %v", err)
+	}
+
+	expected := []string{"id", "email", "name"}
+	if len(cols) != len(expected) {
+		t.Fatalf("expected %d columns, got %d: %v", len(expected), len(cols), cols)
+	}
+	for i, col := range cols {
+		if col != expected[i] {
+			t.Errorf("column %d: expected %q, got %q", i, expected[i], col)
+		}
+	}
+}
+
+func TestTableColumns_NonExistentTable(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	p := New()
+	cols, err := p.TableColumns(db, "nonexistent")
+	if err != nil {
+		t.Fatalf("TableColumns should not error for missing table: %v", err)
+	}
+	if cols != nil {
+		t.Errorf("expected nil for non-existent table, got %v", cols)
 	}
 }

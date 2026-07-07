@@ -24,6 +24,7 @@ SOFTWARE.
 package turso
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -469,6 +470,11 @@ func (p *Provider) GenerateUpsert(table string, conflictKeys []string, columns [
 	}
 
 	return sb.String()
+}
+
+// TableColumns is not yet implemented for Turso.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	return nil, fmt.Errorf("TableColumns is not supported for Turso")
 }
 
 // GetDatabaseSchema extracts schema information from a Turso database

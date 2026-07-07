@@ -619,6 +619,37 @@ func (p *Provider) GenerateForeignKeyConstraints(schema *types.Schema, junctionT
 	return strings.Join(constraints, "\n")
 }
 
+// TableColumns returns the column names for the given table in the public schema.
+// Returns nil, nil if the table does not exist.
+func (p *Provider) TableColumns(db *sql.DB, tableName string) ([]string, error) {
+	query := `
+		SELECT column_name
+		FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = $1
+		ORDER BY ordinal_position`
+
+	rows, err := db.Query(query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("querying columns for table %q: %w", tableName, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var columns []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return nil, fmt.Errorf("scanning column name: %w", err)
+		}
+		columns = append(columns, col)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating columns: %w", err)
+	}
+
+	return columns, nil
+}
+
 // GetDatabaseSchema extracts schema information from a PostgreSQL database
 func (p *Provider) GetDatabaseSchema(connectionString string) (*types.Schema, error) {
 	db, err := sql.Open("postgres", connectionString)

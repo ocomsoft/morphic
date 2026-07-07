@@ -401,7 +401,7 @@ func buildFieldDict(name, typ string, nullable, primaryKey bool, dflt string, le
 // Operation builtins
 // ---------------------------------------------------------------------------
 
-// builtinMigration implements migration(name, dependencies=[], operations=[]).
+// builtinMigration implements migration(name, dependencies=[], operations=[], initial=False).
 // It extracts opValue entries from the operations list and stores the result
 // in b.collected.
 func (b *StarlarkBuiltins) builtinMigration(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -409,16 +409,21 @@ func (b *StarlarkBuiltins) builtinMigration(_ *starlark.Thread, _ *starlark.Buil
 		name         string
 		dependencies *starlark.List
 		operations   *starlark.List
+		initial      starlark.Bool
 	)
 	if err := starlark.UnpackArgs("migration", args, kwargs,
 		"name", &name,
 		"dependencies?", &dependencies,
 		"operations?", &operations,
+		"initial?", &initial,
 	); err != nil {
 		return nil, err
 	}
 
-	m := &migrate.Migration{Name: name}
+	m := &migrate.Migration{
+		Name:    name,
+		Initial: bool(initial),
+	}
 
 	// Extract dependencies.
 	if dependencies != nil {

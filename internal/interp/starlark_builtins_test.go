@@ -1,6 +1,8 @@
 package interp
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ocomsoft/morphic/migrate"
@@ -662,5 +664,60 @@ migration(
 `), b.Env())
 	if err == nil {
 		t.Fatal("expected error when neither rows nor rows_file is set")
+	}
+}
+
+func TestStarlarkBuiltin_Migration_Initial(t *testing.T) {
+	dir := t.TempDir()
+	src := `migration(
+    name = "0001_initial",
+    dependencies = [],
+    initial = True,
+    operations = [
+        create_table("users",
+            fields = [
+                field("id", "uuid", primary_key=True),
+                field("email", "varchar", length=255),
+            ],
+        ),
+    ],
+)`
+	if err := os.WriteFile(filepath.Join(dir, "0001_initial.star"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := LoadStarlarkRegistry(dir)
+	if err != nil {
+		t.Fatalf("LoadStarlarkRegistry: %v", err)
+	}
+
+	migrations := reg.All()
+	if len(migrations) != 1 {
+		t.Fatalf("expected 1 migration, got %d", len(migrations))
+	}
+	if !migrations[0].Initial {
+		t.Error("expected Initial to be true")
+	}
+}
+
+func TestStarlarkBuiltin_Migration_InitialDefaultsFalse(t *testing.T) {
+	dir := t.TempDir()
+	src := `migration(
+    name = "0002_add_field",
+    dependencies = ["0001_initial"],
+    operations = [],
+)`
+	if err := os.WriteFile(filepath.Join(dir, "0002_add_field.star"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reg, err := LoadStarlarkRegistry(dir)
+	if err != nil {
+		t.Fatalf("LoadStarlarkRegistry: %v", err)
+	}
+
+	migrations := reg.All()
+	if migrations[0].Initial {
+		t.Error("expected Initial to default to false")
 	}
 }

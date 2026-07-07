@@ -32,6 +32,7 @@ type Migration struct {
 	Dependencies []string    `json:"dependencies"`       // Names of migrations this depends on
 	Operations   []Operation `json:"-"`                  // Ordered list of schema operations to apply
 	Replaces     []string    `json:"replaces,omitempty"` // For squashed migrations: names of migrations this replaces
+	Initial      bool        `json:"initial,omitempty"`  // Marks this as an initial migration for --fake-initial support
 }
 
 // Field represents a database column definition used in migration operations.

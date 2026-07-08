@@ -117,16 +117,18 @@ func (r *Runner) Up(to string, opts RunOptions) error {
 				return fmt.Errorf("checking fake-initial for %q: %w", mig.Name, err)
 			}
 			if canFake {
-				r.printf("Applying %s... faked (tables already exist)\n", mig.Name)
-				if err := r.recorder.RecordApplied(mig.Name); err != nil {
-					return fmt.Errorf("recording faked migration %q: %w", mig.Name, err)
-				}
-				// Replay state mutations so subsequent migrations see the schema
+				// Replay state mutations first so subsequent migrations see the schema.
+				// Done before recording to maintain atomicity — if Mutate fails,
+				// the migration is not recorded as applied.
 				for _, op := range mig.Operations {
 					if err := op.Mutate(state); err != nil {
 						return fmt.Errorf("replaying state for faked %q: %w", mig.Name, err)
 					}
 				}
+				if err := r.recorder.RecordApplied(mig.Name); err != nil {
+					return fmt.Errorf("recording faked migration %q: %w", mig.Name, err)
+				}
+				r.printf("Applying %s... faked (tables already exist)\n", mig.Name)
 				if to != "" && mig.Name == to {
 					break
 				}
@@ -149,12 +151,18 @@ func (r *Runner) Up(to string, opts RunOptions) error {
 
 // extractExpectedTables walks a migration's operations and returns a map of
 // table name → expected column names for all CreateTable operations.
+// If the migration contains any non-CreateTable operations, it returns nil:
+// such migrations do more than just create tables, so faking them based on
+// table existence alone could silently skip real DDL (e.g. AddField ops
+// folded in from a squash).
 func extractExpectedTables(mig *Migration) map[string][]string {
 	tables := make(map[string][]string)
 	for _, op := range mig.Operations {
 		ct, ok := op.(*CreateTable)
 		if !ok {
-			continue
+			// Non-CreateTable operations mean this migration does more than
+			// just create tables — not safe to fake based on table existence alone.
+			return nil
 		}
 		var cols []string
 		for _, f := range ct.Fields {

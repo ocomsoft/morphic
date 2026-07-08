@@ -1121,3 +1121,51 @@ func TestUp_FakeInitial_ExtraColumnsOK(t *testing.T) {
 		t.Errorf("expected fake with extra columns, got: %s", buf.String())
 	}
 }
+
+func TestUp_FakeInitial_MixedOperationsNotFaked(t *testing.T) {
+	db := openTestDB(t)
+
+	// Pre-create users table
+	_, err := db.Exec("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reg := migrate.NewRegistry()
+	reg.Register(&migrate.Migration{
+		Name:    "0001_initial",
+		Initial: true,
+		Operations: []migrate.Operation{
+			&migrate.CreateTable{
+				Name: "users",
+				Fields: []migrate.Field{
+					{Name: "id", Type: "uuid", PrimaryKey: true},
+					{Name: "email", Type: "varchar", Length: 255},
+				},
+			},
+			&migrate.AddField{
+				Table: "users",
+				Field: migrate.Field{Name: "phone", Type: "varchar", Length: 20},
+			},
+		},
+	})
+
+	recorder := migrate.NewMigrationRecorder(db, sqlite.New())
+	if err := recorder.EnsureTable(); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := migrate.BuildGraph(reg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	runner := migrate.NewRunner(g, sqlite.New(), db, recorder, &buf, "")
+	// Mixed operations (CreateTable + AddField) should NOT be faked
+	_ = runner.Up("", migrate.RunOptions{FakeInitial: true})
+
+	if strings.Contains(buf.String(), "faked") {
+		t.Error("should NOT fake migrations with non-CreateTable operations")
+	}
+}

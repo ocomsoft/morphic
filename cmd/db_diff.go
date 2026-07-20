@@ -54,8 +54,8 @@ var dbDiffCmd = &cobra.Command{
 migration DAG (Directed Acyclic Graph).
 
 The command connects to a live database, introspects its schema, and compares it
-against the schema state reconstructed by compiling and querying the Go migration
-files. Differences are reported in five categories:
+against the schema state reconstructed from the migration files. Differences are
+reported in five categories:
 
   1. Missing from DB      — tables defined in migrations but absent from the
      live database (may indicate unapplied migrations).
@@ -118,7 +118,7 @@ func runDBDiff(cmd *cobra.Command) error {
 		)
 	}
 
-	// Load DAG schema by checking for Go migration files
+	// Load DAG schema by checking for existing migration files
 	var dagSchema *yamlpkg.Schema
 
 	// filepath.Glob only errors on malformed patterns; "*.go" is always valid.
@@ -188,7 +188,7 @@ func runDBDiffWithSchemas(w io.Writer, dagSchema, dbSchema *yamlpkg.Schema, form
 }
 
 // sqlTypeMapping maps SQL-native types (lowercase) returned by database
-// introspection to the canonical YAML schema types used by morphic.
+// introspection to the canonical schema types used by morphic.
 var sqlTypeMapping = map[string]string{
 	"character varying":           "varchar",
 	"character":                   "varchar",

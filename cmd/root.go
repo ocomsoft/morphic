@@ -42,7 +42,7 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "morphic",
-	Short: "Django-style Go migration generator",
+	Short: "Django-style database migration generator",
 	Long: `Generate database migrations from Starlark schema files.
 
 Define your schema in schema.star, generate migration .star files, and run them

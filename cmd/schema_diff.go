@@ -50,14 +50,14 @@ var diffCmd = &cobra.Command{
 	Use:     "schema-diff",
 	Aliases: []string{"diff"},
 	GroupID: "inspect",
-	Short:   "Show schema drift between YAML and migration state",
-	Long: `Compare the current YAML schema files against the migration DAG state
-and show the differences in both directions:
+	Short:   "Show schema drift between schema files and migration state",
+	Long: `Compare the current schema files against the migration DAG state and show
+the differences in both directions:
 
-  In Schema, Not Yet Migrated  — tables/fields/indexes added to schema.yaml
-  In Migrations, Not in Schema — tables/fields/indexes removed from schema.yaml
+  In Schema, Not Yet Migrated  — tables/fields/indexes added to schema
+  In Migrations, Not in Schema — tables/fields/indexes removed from schema
 
-Default output is a color-coded report with YAML snippets.
+Default output is a color-coded report with snippets.
 Use --yaml for machine-readable YAML output, or --json for JSON.`,
 	RunE: runDiff,
 }
@@ -96,7 +96,7 @@ func runDiff(_ *cobra.Command, _ []string) error {
 		prevSchema = schemaStateToYAMLSchema(dagOut.SchemaState, cfg.Database.Type)
 	}
 
-	// 2. Parse current YAML schema
+	// 2. Parse current schema
 	dbType, err := yamlpkg.ParseDatabaseType(cfg.Database.Type)
 	if err != nil {
 		return fmt.Errorf("invalid database type: %w", err)
@@ -104,12 +104,12 @@ func runDiff(_ *cobra.Command, _ []string) error {
 	components := workflow.InitializeYAMLComponents(dbType, diffVerbose)
 	allSchemas, err := workflow.ScanAndParseSchemas(components, diffVerbose)
 	if err != nil {
-		return fmt.Errorf("parsing YAML schema: %w", err)
+		return fmt.Errorf("parsing schema: %w", err)
 	}
 
 	currentSchema, err := workflow.MergeAndValidateSchemas(components, allSchemas, dbType, diffVerbose)
 	if err != nil {
-		return fmt.Errorf("merging YAML schemas: %w", err)
+		return fmt.Errorf("merging schemas: %w", err)
 	}
 
 	// 3. Diff
@@ -395,7 +395,7 @@ func formatSchemaDiffYAML(w io.Writer, diff *yamlpkg.SchemaDiff) error {
 		return fmt.Errorf("marshalling diff output: %w", err)
 	}
 
-	_, _ = fmt.Fprintf(w, "# Schema diff: %d change(s) between YAML schema and migration state\n", len(diff.Changes))
+	_, _ = fmt.Fprintf(w, "# Schema diff: %d change(s) between schema and migration state\n", len(diff.Changes))
 	_, _ = fmt.Fprintln(w, "# 'add' = in schema.yaml but not yet migrated")
 	_, _ = fmt.Fprintln(w, "# 'remove' = in migration state but removed from schema.yaml")
 	_, _ = fmt.Fprintln(w, "# 'modify' = field properties changed")

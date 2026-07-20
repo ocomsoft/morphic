@@ -49,12 +49,12 @@ var schema2diagramCmd = &cobra.Command{
 	Use:     "schema-to-diagram",
 	Aliases: []string{"schema2diagram"},
 	GroupID: "inspect",
-	Short:   "Generate Markdown documentation with diagrams from YAML schemas",
+	Short:   "Generate Markdown documentation with diagrams from schema files",
 	Long: `Generate comprehensive Markdown documentation with Entity Relationship Diagrams (ERD)
-from YAML schema files.
+from schema files.
 
-This command scans all YAML schema files in Go module dependencies, merges them
-into a unified schema, and generates detailed Markdown documentation including:
+This command scans all schema files in module dependencies, merges them into a
+unified schema, and generates detailed Markdown documentation including:
 
 - Complete table documentation with field details
 - Mermaid Entity Relationship Diagrams (ERD)
@@ -116,21 +116,21 @@ func runSchema2Diagram(cmd *cobra.Command, args []string) error {
 	components := workflow.InitializeYAMLComponents(dbType, verbose)
 
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n1. Scanning Go modules for YAML schema files...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n1. Scanning for schema files...\n")
 	}
 
 	// Scan and parse schemas using shared function
 	allSchemas, err := workflow.ScanAndParseSchemas(components, verbose)
 	if err != nil {
 		if err.Error() == "no YAML schema files found" {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No YAML schema files found. Nothing to document.\n")
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No schema files found. Nothing to document.\n")
 			return nil
 		}
 		return err
 	}
 
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Parsing and merging YAML schemas...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Parsing and merging schemas...\n")
 	}
 
 	// Merge and validate schemas using shared function

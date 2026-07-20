@@ -36,16 +36,16 @@ import (
 // currentStateVerbose controls verbose output for the current_state command.
 var currentStateVerbose bool
 
-// currentStateCmd reconstructs the schema state from existing Go migration
-// files and outputs it as YAML. This is useful for debugging migration drift
-// — you can compare the output against your schema.yaml to see exactly what
-// the migration DAG thinks the current schema looks like.
+// currentStateCmd reconstructs the schema state from existing migration files
+// and outputs it as YAML. This is useful for debugging migration drift — you
+// can compare the output against your schema to see exactly what the migration
+// DAG thinks the current schema looks like.
 var currentStateCmd = &cobra.Command{
 	Use:     "current-state",
 	Aliases: []string{"current_state"},
 	GroupID: "inspect",
 	Short:   "Show the reconstructed schema state from existing migrations",
-	Long: `Rebuilds the merged schema from all existing Go migration files by walking the
+	Long: `Rebuilds the merged schema from all existing migration files by walking the
 migration DAG and applying each operation's Mutate in order. The resulting
 schema state is output as YAML.
 

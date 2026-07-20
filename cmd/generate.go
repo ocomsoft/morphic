@@ -56,23 +56,23 @@ var (
 	goMigFormat  string
 )
 
-// goMigrationsCmd is the Cobra command for generating Go migration files from
-// YAML schema changes. It compares the current YAML schema against the
-// reconstructed state from existing Go migration files and generates a new
-// migration .go file for any changes detected.
+// goMigrationsCmd is the Cobra command for generating Starlark migration files
+// from schema changes. It compares the current schema against the reconstructed
+// state from existing migration files and generates a new .star migration file
+// for any changes detected.
 var goMigrationsCmd = &cobra.Command{
 	Use:     "generate",
 	GroupID: "schema",
-	Short:   "Generate Go migration files from YAML schema changes",
-	Long: `Compares the current YAML schema against the reconstructed state from existing
-Go migration files and generates a new migration .go file for any changes detected.
+	Short:   "Generate migration files from schema changes",
+	Long: `Compares the current schema against the reconstructed state from existing
+migration files and generates a new Starlark .star migration file for any
+changes detected.
 
 This command implements the Django-style migration workflow:
-  1. Builds the existing migrations binary (if any .go files exist)
-  2. Queries the DAG to reconstruct the current schema state
-  3. Parses the current YAML schema files
-  4. Diffs the two schemas
-  5. Generates a new .go migration file with typed operations
+  1. Loads existing migrations to reconstruct the current schema state
+  2. Parses the current schema files
+  3. Diffs the two schemas
+  4. Generates a new .star migration file with typed operations
 
 Use --merge to generate a merge migration when concurrent branches are detected.
 Use --check in CI/CD to fail if unapplied schema changes exist.`,
@@ -95,13 +95,13 @@ func init() {
 		"Output format: go or starlark (overrides config)")
 }
 
-// runGoMakeMigrations is the main entry point for Go migration generation.
-// It orchestrates the build-query-diff-generate pipeline:
-//  1. Scan for existing .go migration files in the migrations directory
-//  2. If migrations exist, compile them and query the DAG for the current schema state
-//  3. Parse and merge the current YAML schema files
+// runGoMakeMigrations is the main entry point for migration generation.
+// It orchestrates the load-query-diff-generate pipeline:
+//  1. Scan for existing migration files in the migrations directory
+//  2. If migrations exist, load them and query the DAG for the current schema state
+//  3. Parse and merge the current schema files
 //  4. Diff the reconstructed state against the current schema
-//  5. Generate a new .go migration file (or merge migration if --merge is set)
+//  5. Generate a new .star migration file (or merge migration if --merge is set)
 func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
@@ -129,7 +129,7 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 		prevSchema = schemaStateToYAMLSchema(dagOut.SchemaState, cfg.Database.Type)
 	}
 
-	// 2. Parse current YAML schema
+	// 2. Parse current schema
 	dbType, err := yamlpkg.ParseDatabaseType(cfg.Database.Type)
 	if err != nil {
 		return fmt.Errorf("invalid database type: %w", err)
@@ -137,13 +137,13 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	components := workflow.InitializeYAMLComponents(dbType, goMigVerbose)
 	allSchemas, err := workflow.ScanAndParseSchemas(components, goMigVerbose)
 	if err != nil {
-		return fmt.Errorf("parsing YAML schema: %w", err)
+		return fmt.Errorf("parsing schema: %w", err)
 	}
 
 	// Merge parsed schemas into a single schema for diffing
 	currentSchema, err := workflow.MergeAndValidateSchemas(components, allSchemas, dbType, goMigVerbose)
 	if err != nil {
-		return fmt.Errorf("merging YAML schemas: %w", err)
+		return fmt.Errorf("merging schemas: %w", err)
 	}
 
 	// 3. Diff

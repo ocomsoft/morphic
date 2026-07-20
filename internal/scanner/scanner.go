@@ -290,7 +290,15 @@ func (s *Scanner) readSchemaFileWithType(r io.Reader, schemaType SchemaType) (st
 }
 
 func (s *Scanner) getModulePath(modPath, version string) string {
-	// Try to find the module in the Go module cache
+	// Check workspace overrides first (go.work use directives)
+	if wsPath := s.resolveWorkspaceModule(modPath); wsPath != "" {
+		if s.verbose {
+			fmt.Printf("  Resolved %s from workspace: %s\n", modPath, wsPath)
+		}
+		return wsPath
+	}
+
+	// Fall back to the Go module cache
 	goPath := os.Getenv("GOPATH")
 	if goPath == "" {
 		home, err := os.UserHomeDir()
@@ -314,6 +322,72 @@ func (s *Scanner) getModulePath(modPath, version string) string {
 	cachePath = filepath.Join(goPath, "pkg", "mod", fmt.Sprintf("%s@%s", escapedPath, version))
 	if _, err := os.Stat(cachePath); err == nil {
 		return cachePath
+	}
+
+	return ""
+}
+
+// resolveWorkspaceModule checks if a go.work file exists and whether the
+// given module path matches one of its workspace directories.
+func (s *Scanner) resolveWorkspaceModule(modPath string) string {
+	workFilePath := s.findGoWork()
+	if workFilePath == "" {
+		return ""
+	}
+
+	workFileBytes, err := os.ReadFile(workFilePath)
+	if err != nil {
+		return ""
+	}
+
+	workFile, err := modfile.ParseWork(workFilePath, workFileBytes, nil)
+	if err != nil {
+		return ""
+	}
+
+	workDir := filepath.Dir(workFilePath)
+
+	for _, use := range workFile.Use {
+		useDir := filepath.Join(workDir, use.Path)
+		useGoMod := filepath.Join(useDir, "go.mod")
+
+		useModBytes, err := os.ReadFile(useGoMod)
+		if err != nil {
+			continue
+		}
+
+		useMod, err := modfile.Parse(useGoMod, useModBytes, nil)
+		if err != nil || useMod.Module == nil {
+			continue
+		}
+
+		if useMod.Module.Mod.Path == modPath {
+			return useDir
+		}
+	}
+
+	return ""
+}
+
+// findGoWork searches for a go.work file starting from the current directory
+// and walking up the directory tree.
+func (s *Scanner) findGoWork() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		candidate := filepath.Join(dir, "go.work")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
 	}
 
 	return ""

@@ -365,6 +365,172 @@ func TestScanner_ScanStarlarkModules_FullPipeline(t *testing.T) {
 	}
 }
 
+func TestScanner_ScanStarlarkModules_WorkspaceResolution(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_workspace_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create workspace root with go.work
+	workContent := "go 1.21\n\nuse (\n\t./app\n\t./lib\n)\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.work"), []byte(workContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create app module (the one we'll run the scanner from)
+	appDir := filepath.Join(tmpDir, "app")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	appGoMod := "module test/app\n\ngo 1.21\n\nrequire test/lib v0.0.0\n"
+	if err := os.WriteFile(filepath.Join(appDir, "go.mod"), []byte(appGoMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create app's own schema
+	appSchemaDir := filepath.Join(appDir, "modules", "core", "schema")
+	if err := os.MkdirAll(appSchemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appSchemaDir, "schema.star"), []byte(`database(name="core", version="1.0")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create lib module with a schema (workspace dependency)
+	libDir := filepath.Join(tmpDir, "lib")
+	if err := os.MkdirAll(libDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	libGoMod := "module test/lib\n\ngo 1.21\n"
+	if err := os.WriteFile(filepath.Join(libDir, "go.mod"), []byte(libGoMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+	libSchemaDir := filepath.Join(libDir, "schema")
+	if err := os.MkdirAll(libSchemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(libSchemaDir, "schema.star"), []byte(`database(name="lib", version="1.0")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run scanner from app directory
+	if err := os.Chdir(appDir); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(true)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Should find both: lib's schema (via workspace) and app's own schema
+	if len(schemas) != 2 {
+		t.Fatalf("Expected 2 schemas (workspace lib + local), got %d", len(schemas))
+	}
+
+	// Verify the lib schema came from the workspace path, not module cache
+	foundLib := false
+	for _, schema := range schemas {
+		if schema.ModulePath == "test/lib" {
+			foundLib = true
+			if !strings.Contains(schema.FilePath, filepath.Join("lib", "schema", "schema.star")) {
+				t.Errorf("Expected lib schema from workspace path, got: %s", schema.FilePath)
+			}
+		}
+	}
+	if !foundLib {
+		t.Error("Expected to find test/lib schema via workspace resolution")
+	}
+}
+
+func TestScanner_resolveWorkspaceModule(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_resolve_ws_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create go.work with a use directive
+	workContent := "go 1.21\n\nuse ./mylib\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.work"), []byte(workContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create mylib with go.mod
+	libDir := filepath.Join(tmpDir, "mylib")
+	if err := os.MkdirAll(libDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	libGoMod := "module example.com/mylib\n\ngo 1.21\n"
+	if err := os.WriteFile(filepath.Join(libDir, "go.mod"), []byte(libGoMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run from inside the workspace
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+
+	// Should resolve workspace module
+	result := s.resolveWorkspaceModule("example.com/mylib")
+	if result == "" {
+		t.Fatal("Expected workspace path, got empty string")
+	}
+	if result != libDir {
+		t.Errorf("Expected %s, got %s", libDir, result)
+	}
+
+	// Should NOT resolve non-workspace module
+	result = s.resolveWorkspaceModule("example.com/other")
+	if result != "" {
+		t.Errorf("Expected empty string for non-workspace module, got %s", result)
+	}
+}
+
+func TestScanner_findGoWork(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_find_gowork_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create go.work in root
+	workPath := filepath.Join(tmpDir, "go.work")
+	if err := os.WriteFile(workPath, []byte("go 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a nested directory
+	nested := filepath.Join(tmpDir, "a", "b", "c")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should find go.work from a deeply nested subdirectory
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	found := s.findGoWork()
+	if found != workPath {
+		t.Errorf("Expected %s, got %s", workPath, found)
+	}
+}
+
 func TestScanner_readSchemaFile(t *testing.T) {
 	tests := []struct {
 		name           string

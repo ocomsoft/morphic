@@ -102,7 +102,7 @@ func runFindIncludes(cmd *cobra.Command, args []string) error {
 	return workflow.ExecuteFindIncludes(cmd, cfgFile, schemaPath, interactive, includeWorkspace, callbacks)
 }
 
-// discoverSchemas finds all YAML schemas in Go modules and workspace
+// discoverSchemas finds all schemas in Go modules and workspace
 func discoverSchemas() ([]workflow.DiscoveredSchema, error) {
 	var discovered []workflow.DiscoveredSchema
 

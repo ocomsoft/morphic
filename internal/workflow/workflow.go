@@ -356,7 +356,7 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 	// Check if schema flag was provided
 	schemaProvided := cmd.Flags().Changed("schema")
 
-	// If schema not provided, search for schema.yaml files
+	// If schema not provided, search for schema files
 	if !schemaProvided {
 		if verbose {
 			color.Blue("No --schema flag provided, searching for schema files...")

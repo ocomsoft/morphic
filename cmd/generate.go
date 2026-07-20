@@ -134,7 +134,7 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid database type: %w", err)
 	}
-	components := workflow.InitializeYAMLComponents(dbType, goMigVerbose)
+	components := workflow.InitializeSchemaComponents(dbType, goMigVerbose)
 	allSchemas, err := workflow.ScanAndParseSchemas(components, goMigVerbose)
 	if err != nil {
 		return fmt.Errorf("parsing schema: %w", err)

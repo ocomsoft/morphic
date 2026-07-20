@@ -34,9 +34,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// setupSchemaDir creates a temp directory with a go.mod and a YAML schema file
-// containing the given schema content, then chdir into it. It returns a cleanup
-// function that restores the original working directory.
+// setupSchemaDir creates a temp directory with a go.mod and a Starlark schema
+// file containing the given schema content, then chdir into it. It returns a
+// cleanup function that restores the original working directory.
 func setupSchemaDir(t *testing.T, schemaContent string) func() {
 	t.Helper()
 	dir := t.TempDir()
@@ -50,13 +50,13 @@ func setupSchemaDir(t *testing.T, schemaContent string) func() {
 		t.Fatalf("WriteFile go.mod: %v", err)
 	}
 
-	// Create schema directory and schema.yaml
+	// Create schema directory and schema.star
 	schemaDir := filepath.Join(dir, "schema")
 	if err := os.MkdirAll(schemaDir, 0755); err != nil {
 		t.Fatalf("MkdirAll schema: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(schemaDir, "schema.yaml"), []byte(schemaContent), 0644); err != nil {
-		t.Fatalf("WriteFile schema.yaml: %v", err)
+	if err := os.WriteFile(filepath.Join(schemaDir, "schema.star"), []byte(schemaContent), 0644); err != nil {
+		t.Fatalf("WriteFile schema.star: %v", err)
 	}
 
 	if err := os.Chdir(dir); err != nil {
@@ -81,18 +81,14 @@ func newTestCmd() (*cobra.Command, *bytes.Buffer) {
 // TestExecuteDumpSQL_FullSchema verifies that full schema dump mode (pending=false)
 // generates SQL output for a simple schema.
 func TestExecuteDumpSQL_FullSchema(t *testing.T) {
-	schema := `database:
-  name: users_db
-  version: 1.0.0
+	schema := `database("users_db", "1.0.0")
 
-tables:
-  - name: users
-    fields:
-      - name: id
-        type: integer
-        primary_key: true
-      - name: email
-        type: text
+table("users",
+    fields = [
+        serial("id", primary_key=True),
+        text("email"),
+    ],
+)
 `
 	cleanup := setupSchemaDir(t, schema)
 	defer cleanup()
@@ -132,18 +128,14 @@ tables:
 // TestExecuteDumpSQL_NoPendingChanges verifies that pending mode with no migrations
 // directory still works (treats all changes as pending since there's no previous state).
 func TestExecuteDumpSQL_NoPendingChanges(t *testing.T) {
-	schema := `database:
-  name: users_db
-  version: 1.0.0
+	schema := `database("users_db", "1.0.0")
 
-tables:
-  - name: users
-    fields:
-      - name: id
-        type: integer
-        primary_key: true
-      - name: email
-        type: text
+table("users",
+    fields = [
+        serial("id", primary_key=True),
+        text("email"),
+    ],
+)
 `
 	cleanup := setupSchemaDir(t, schema)
 	defer cleanup()

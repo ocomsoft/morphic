@@ -112,8 +112,8 @@ func runSchema2Diagram(cmd *cobra.Command, args []string) error {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Output file: %s\n", diagramOutput)
 	}
 
-	// Initialize YAML components using shared workflow functions
-	components := workflow.InitializeYAMLComponents(dbType, verbose)
+	// Initialize schema components using shared workflow functions
+	components := workflow.InitializeSchemaComponents(dbType, verbose)
 
 	if verbose {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n1. Scanning for schema files...\n")
@@ -122,7 +122,7 @@ func runSchema2Diagram(cmd *cobra.Command, args []string) error {
 	// Scan and parse schemas using shared function
 	allSchemas, err := workflow.ScanAndParseSchemas(components, verbose)
 	if err != nil {
-		if err.Error() == "no YAML schema files found" {
+		if err.Error() == "no schema files found" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No schema files found. Nothing to document.\n")
 			return nil
 		}

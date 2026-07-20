@@ -165,7 +165,7 @@ func ExecuteDumpSQL(cmd *cobra.Command, databaseType string, pending bool, verbo
 		return fmt.Errorf("invalid database type: %w", err)
 	}
 
-	// Initialize YAML components
+	// Initialize schema components
 	components := InitializeSchemaComponents(dbType, verbose)
 
 	if verbose {

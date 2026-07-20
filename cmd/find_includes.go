@@ -35,6 +35,7 @@ import (
 	"golang.org/x/mod/modfile"
 	yaml "gopkg.in/yaml.v3"
 
+	"github.com/ocomsoft/morphic/internal/interp"
 	"github.com/ocomsoft/morphic/internal/workflow"
 	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 )
@@ -51,10 +52,10 @@ var findIncludesCmd = &cobra.Command{
 	Aliases: []string{"find_includes"},
 	GroupID: "convert",
 	Short:   "Discover and add schema includes from Go modules",
-	Long: `Automatically discover YAML schema files in Go modules and workspace,
-then add them as includes to your main schema.yaml file.
+	Long: `Automatically discover Starlark schema files in Go modules and workspace,
+then add them as includes to your main schema file.
 
-This command searches for schema.yaml files in any subdirectory within:
+This command searches for schema.star files in any subdirectory within:
 1. Go workspace modules (prioritized and marked as "recommended")
 2. Direct dependencies in go.mod
 
@@ -66,7 +67,7 @@ The command preserves existing includes and only adds newly discovered ones.
 Examples:
   morphic find_includes                    # Add all discovered schemas
   morphic find_includes --interactive      # Review before adding
-  morphic find_includes --schema custom.yaml  # Use different schema file`,
+  morphic find_includes --schema custom.star  # Use different schema file`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runFindIncludes(cmd, args)
 	},
@@ -88,7 +89,8 @@ func runFindIncludes(cmd *cobra.Command, args []string) error {
 			return selectSchemasInteractively(schemas)
 		},
 		LoadExistingSchema: func(path string) (*yamlpkg.Schema, error) {
-			return loadExistingSchema(path)
+			schemaDir := filepath.Dir(path)
+			return interp.LoadSchema(schemaDir, false)
 		},
 		FilterNewSchemas: func(discovered []workflow.DiscoveredSchema, existing *yamlpkg.Schema) []workflow.DiscoveredSchema {
 			return filterNewSchemas(discovered, existing)
@@ -314,17 +316,19 @@ func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.Discovered
 			return filepath.SkipDir
 		}
 
-		// Look for schema.yaml files in any subdirectory
-		if d.Name() == "schema.yaml" {
+		// Look for schema.star files in any subdirectory
+		if d.Name() == "schema.star" {
 			relPath, err := filepath.Rel(basePath, path)
 			if err != nil {
 				return nil // Continue walking
 			}
 
-			schema, err := parseSchemaFile(path)
+			// Load the schema using interp.LoadSchema on the parent directory
+			schemaDir := filepath.Dir(path)
+			schema, err := interp.LoadSchema(schemaDir, false)
 			if err != nil {
 				if verbose {
-					color.Yellow("    Warning: Failed to parse %s: %v", path, err)
+					color.Yellow("    Warning: Failed to load %s: %v", path, err)
 				}
 				return nil // Continue walking
 			}
@@ -337,7 +341,7 @@ func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.Discovered
 				Schema:       schema,
 				TableCount:   len(schema.Tables),
 				DatabaseName: schema.Database.Name,
-				DatabaseType: "yaml", // Could be enhanced to detect actual DB type from defaults
+				DatabaseType: "starlark",
 			}
 
 			schemas = append(schemas, discovered)
@@ -368,17 +372,18 @@ func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchem
 			return filepath.SkipDir
 		}
 
-		// Look for schema.yaml files in any subdirectory
-		if d.Name() == "schema.yaml" {
+		// Look for schema.star files in any subdirectory
+		if d.Name() == "schema.star" {
 			relPath, err := filepath.Rel(modPath, path)
 			if err != nil {
 				return nil // Continue walking
 			}
 
-			schema, err := parseSchemaFile(path)
+			schemaDir := filepath.Dir(path)
+			schema, err := interp.LoadSchema(schemaDir, false)
 			if err != nil {
 				if verbose {
-					color.Yellow("    Warning: Failed to parse %s: %v", path, err)
+					color.Yellow("    Warning: Failed to load %s: %v", path, err)
 				}
 				return nil // Continue walking
 			}
@@ -391,7 +396,7 @@ func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchem
 				Schema:       schema,
 				TableCount:   len(schema.Tables),
 				DatabaseName: schema.Database.Name,
-				DatabaseType: "yaml",
+				DatabaseType: "starlark",
 			}
 
 			schemas = append(schemas, discovered)
@@ -407,7 +412,7 @@ func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchem
 	return schemas, err
 }
 
-// findLocalSchemaFiles recursively searches for schema.yaml files in the current directory
+// findLocalSchemaFiles recursively searches for schema.star files in the current directory
 func findLocalSchemaFiles() ([]workflow.LocalSchemaFile, error) {
 	var schemas []workflow.LocalSchemaFile
 	currentDir, err := os.Getwd()
@@ -425,12 +430,13 @@ func findLocalSchemaFiles() ([]workflow.LocalSchemaFile, error) {
 			return filepath.SkipDir
 		}
 
-		// Look for schema.yaml files
-		if d.Name() == "schema.yaml" {
-			schema, err := parseSchemaFile(path)
+		// Look for schema.star files
+		if d.Name() == "schema.star" {
+			schemaDir := filepath.Dir(path)
+			schema, err := interp.LoadSchema(schemaDir, false)
 			if err != nil {
 				if verbose {
-					color.Yellow("Warning: Failed to parse %s: %v", path, err)
+					color.Yellow("Warning: Failed to load %s: %v", path, err)
 				}
 				return nil // Continue walking
 			}
@@ -457,21 +463,6 @@ func findLocalSchemaFiles() ([]workflow.LocalSchemaFile, error) {
 	})
 
 	return schemas, err
-}
-
-// parseSchemaFile parses a YAML schema file
-func parseSchemaFile(filePath string) (*yamlpkg.Schema, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var schema yamlpkg.Schema
-	if err := yaml.Unmarshal(content, &schema); err != nil {
-		return nil, err
-	}
-
-	return &schema, nil
 }
 
 // getModuleCachePath gets the path to a module in the Go module cache
@@ -505,21 +496,6 @@ func getModuleCachePath(modPath, version string) string {
 	return ""
 }
 
-// loadExistingSchema loads the existing schema file
-func loadExistingSchema(filePath string) (*yamlpkg.Schema, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var schema yamlpkg.Schema
-	if err := yaml.Unmarshal(content, &schema); err != nil {
-		return nil, err
-	}
-
-	return &schema, nil
-}
-
 // filterNewSchemas filters out schemas that are already included
 func filterNewSchemas(discovered []workflow.DiscoveredSchema, existingSchema *yamlpkg.Schema) []workflow.DiscoveredSchema {
 	var newSchemas []workflow.DiscoveredSchema
@@ -548,7 +524,7 @@ func filterNewSchemas(discovered []workflow.DiscoveredSchema, existingSchema *ya
 func selectLocalSchemaFile(schemas []workflow.LocalSchemaFile) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 
-	color.Cyan("\nMultiple schema.yaml files found:")
+	color.Cyan("\nMultiple schema files found:")
 	color.Cyan("=" + strings.Repeat("=", 35))
 
 	for i, schema := range schemas {
@@ -654,7 +630,7 @@ func init() {
 	findIncludesCmd.Flags().BoolVar(&interactive, "interactive", false,
 		"Review and select which schemas to include")
 	findIncludesCmd.Flags().StringVar(&schemaPath, "schema", "",
-		"Path to the main schema file to update (if not provided, will search for schema.yaml files)")
+		"Path to the main schema file to update (if not provided, will search for schema.star files)")
 	findIncludesCmd.Flags().BoolVar(&includeWorkspace, "workspace", true,
 		"Include workspace modules in discovery")
 	findIncludesCmd.Flags().BoolVar(&verbose, "verbose", false,

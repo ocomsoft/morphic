@@ -293,6 +293,78 @@ func TestScanner_ScanStarlarkModules_IgnoresYAML(t *testing.T) {
 	}
 }
 
+func TestScanner_ScanStarlarkModules_FullPipeline(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_integration_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err = os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/integration\n\ngo 1.21\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a mix of .star and .yaml files — only .star should be found
+	starModules := []string{"tenant", "code_data", "files_data"}
+	for _, mod := range starModules {
+		dir := filepath.Join("modules", mod, "schema")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf(`database(name="%s", version="1.0")`, mod)
+		if err := os.WriteFile(filepath.Join(dir, "schema.star"), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create YAML files that should be ignored
+	yamlDir := filepath.Join("modules", "legacy", "schema")
+	if err := os.MkdirAll(yamlDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(yamlDir, "schema.yaml"), []byte("database:\n  name: legacy\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a .gitignored directory that should be skipped
+	ignoredDir := filepath.Join("vendor", "dep", "schema")
+	if err := os.MkdirAll(ignoredDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ignoredDir, "schema.star"), []byte(`database(name="vendored", version="1.0")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(".gitignore", []byte("vendor/\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(schemas) != 3 {
+		t.Fatalf("Expected 3 schemas (star only, no yaml, no vendor), got %d", len(schemas))
+	}
+
+	for _, schema := range schemas {
+		if schema.Type != SchemaTypeStarlark {
+			t.Errorf("Expected SchemaTypeStarlark, got %s for %s", schema.Type, schema.FilePath)
+		}
+		if !schema.HasMarker {
+			t.Errorf("Expected HasMarker=true for %s", schema.FilePath)
+		}
+	}
+}
+
 func TestScanner_readSchemaFile(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// Package workflow provides shared YAML schema processing pipelines used by
+// Package workflow provides shared schema processing pipelines used by
 // multiple CLI commands (generate, diff, dump-sql, schema2diagram, find-includes).
 package workflow
 
@@ -35,12 +35,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ocomsoft/morphic/internal/config"
+	"github.com/ocomsoft/morphic/internal/interp"
 	"github.com/ocomsoft/morphic/internal/scanner"
 	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 )
 
-// YAMLComponents holds the initialized YAML processing components
-type YAMLComponents struct {
+// SchemaComponents holds the initialized schema processing components
+type SchemaComponents struct {
 	StateManager *yamlpkg.StateManager
 	Scanner      *scanner.Scanner
 	Parser       *yamlpkg.Parser
@@ -48,9 +49,9 @@ type YAMLComponents struct {
 	DiffEngine   *yamlpkg.DiffEngine
 }
 
-// InitializeYAMLComponents creates and initializes all YAML processing components
-func InitializeYAMLComponents(dbType yamlpkg.DatabaseType, verbose bool) *YAMLComponents {
-	return &YAMLComponents{
+// InitializeSchemaComponents creates and initializes all schema processing components
+func InitializeSchemaComponents(dbType yamlpkg.DatabaseType, verbose bool) *SchemaComponents {
+	return &SchemaComponents{
 		StateManager: yamlpkg.NewStateManager(verbose),
 		Scanner:      scanner.New(verbose),
 		Parser:       yamlpkg.NewParser(verbose),
@@ -59,16 +60,16 @@ func InitializeYAMLComponents(dbType yamlpkg.DatabaseType, verbose bool) *YAMLCo
 	}
 }
 
-// ScanAndParseSchemas scans for YAML schema files and parses them with include support
-func ScanAndParseSchemas(components *YAMLComponents, verbose bool) ([]*yamlpkg.Schema, error) {
-	// Scan for YAML schema files
-	schemaFiles, err := components.Scanner.ScanYAMLModules()
+// ScanAndParseSchemas scans for Starlark schema files and loads them
+func ScanAndParseSchemas(components *SchemaComponents, verbose bool) ([]*yamlpkg.Schema, error) {
+	// Scan for Starlark schema files
+	schemaFiles, err := components.Scanner.ScanStarlarkModules()
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan modules: %w", err)
 	}
 
 	if verbose {
-		color.Green("Found %d YAML schema files\n", len(schemaFiles))
+		color.Green("Found %d schema files\n", len(schemaFiles))
 		for _, file := range schemaFiles {
 			marker := ""
 			if file.HasMarker {
@@ -79,28 +80,21 @@ func ScanAndParseSchemas(components *YAMLComponents, verbose bool) ([]*yamlpkg.S
 	}
 
 	if len(schemaFiles) == 0 {
-		return nil, fmt.Errorf("no YAML schema files found")
+		return nil, fmt.Errorf("no schema files found")
 	}
 
-	// Parse all YAML schemas with include support
+	// Load all schemas using interp.LoadSchema
 	var allSchemas []*yamlpkg.Schema
 	for _, file := range schemaFiles {
 		if verbose {
 			color.Blue("Processing schema file: %s\n", file.ModulePath)
 		}
 
-		// Use include-aware parsing if the file has a path, otherwise fall back to content parsing
-		var schema *yamlpkg.Schema
-		if file.FilePath != "" {
-			// Parse with include support using file path
-			schema, err = components.Parser.ParseSchemaFile(file.FilePath)
-		} else {
-			// Fall back to content-based parsing (no includes supported)
-			schema, err = components.Parser.ParseSchema(file.Content)
-		}
-
+		// Use interp.LoadSchema on the parent directory of the discovered file
+		schemaDir := filepath.Dir(file.FilePath)
+		schema, err := interp.LoadSchema(schemaDir, verbose)
 		if err != nil {
-			return nil, fmt.Errorf("parsing failed for %s: %w", file.ModulePath, err)
+			return nil, fmt.Errorf("loading schema failed for %s: %w", file.ModulePath, err)
 		}
 
 		// Run basic structure validation but continue if it fails
@@ -115,7 +109,7 @@ func ScanAndParseSchemas(components *YAMLComponents, verbose bool) ([]*yamlpkg.S
 }
 
 // MergeAndValidateSchemas merges schemas and validates the result
-func MergeAndValidateSchemas(components *YAMLComponents, allSchemas []*yamlpkg.Schema, dbType yamlpkg.DatabaseType, verbose bool) (*yamlpkg.Schema, error) {
+func MergeAndValidateSchemas(components *SchemaComponents, allSchemas []*yamlpkg.Schema, dbType yamlpkg.DatabaseType, verbose bool) (*yamlpkg.Schema, error) {
 	// Merge schemas
 	mergedSchema, err := components.Merger.MergeSchemas(allSchemas)
 	if err != nil {
@@ -172,7 +166,7 @@ func ExecuteDumpSQL(cmd *cobra.Command, databaseType string, pending bool, verbo
 	}
 
 	// Initialize YAML components
-	components := InitializeYAMLComponents(dbType, verbose)
+	components := InitializeSchemaComponents(dbType, verbose)
 
 	if verbose {
 		if pending {
@@ -183,21 +177,21 @@ func ExecuteDumpSQL(cmd *cobra.Command, databaseType string, pending bool, verbo
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "============================\n")
 		}
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Database type: %s\n", dbType)
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n1. Scanning Go modules for YAML schema files...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n1. Scanning Go modules for schema files...\n")
 	}
 
 	// Scan and parse schemas
 	allSchemas, err := ScanAndParseSchemas(components, false)
 	if err != nil {
-		if err.Error() == "no YAML schema files found" {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No YAML schema files found. Nothing to dump.\n")
+		if err.Error() == "no schema files found" {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No schema files found. Nothing to dump.\n")
 			return nil
 		}
 		return err
 	}
 
 	if verbose {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Parsing and merging YAML schemas...\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "\n2. Parsing and merging schemas...\n")
 	}
 
 	// Merge and validate schemas
@@ -324,7 +318,7 @@ type DiscoveredSchema struct {
 	DatabaseType string
 }
 
-// LocalSchemaFile represents a local schema.yaml file found in the current directory
+// LocalSchemaFile represents a local schema file found in the current directory
 type LocalSchemaFile struct {
 	Path         string
 	DatabaseName string
@@ -365,7 +359,7 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 	// If schema not provided, search for schema.yaml files
 	if !schemaProvided {
 		if verbose {
-			color.Blue("No --schema flag provided, searching for schema.yaml files...")
+			color.Blue("No --schema flag provided, searching for schema files...")
 		}
 
 		localSchemas, err := callbacks.FindLocalSchemaFiles()
@@ -374,7 +368,7 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 		}
 
 		if len(localSchemas) == 0 {
-			return fmt.Errorf("no schema.yaml files found in current directory and subdirectories")
+			return fmt.Errorf("no schema files found in current directory and subdirectories")
 		}
 
 		if len(localSchemas) == 1 {
@@ -409,7 +403,7 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 	}
 
 	if len(discovered) == 0 {
-		color.Yellow("No YAML schemas found in Go modules.")
+		color.Yellow("No schemas found in Go modules.")
 		return nil
 	}
 

@@ -24,6 +24,7 @@ SOFTWARE.
 package scanner
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,6 +159,137 @@ func TestScanner_ScanModules_EmptyGoMod(t *testing.T) {
 
 	if !errors.IsValidationError(err) {
 		t.Errorf("Expected ValidationError, got %T", err)
+	}
+}
+
+func TestScanner_ScanStarlarkModules_FindsStarFiles(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_star_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err = os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/module\n\ngo 1.21\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	schemaDir := filepath.Join("modules", "tenant", "schema")
+	if err := os.MkdirAll(schemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	starContent := `database(name="tenant", version="1.0")`
+	if err := os.WriteFile(filepath.Join(schemaDir, "schema.star"), []byte(starContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(schemas) != 1 {
+		t.Fatalf("Expected 1 schema, got %d", len(schemas))
+	}
+
+	schema := schemas[0]
+	if schema.ModulePath != "current module" {
+		t.Errorf("Expected module path 'current module', got '%s'", schema.ModulePath)
+	}
+	if schema.Type != SchemaTypeStarlark {
+		t.Errorf("Expected type SchemaTypeStarlark, got '%s'", schema.Type)
+	}
+	if !schema.HasMarker {
+		t.Error("Expected HasMarker to be true for Starlark schemas")
+	}
+	if !strings.Contains(schema.Content, "database(") {
+		t.Error("Expected schema content to contain database( call")
+	}
+}
+
+func TestScanner_ScanStarlarkModules_MultipleModules(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_star_multi_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err = os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/module\n\ngo 1.21\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	modules := []string{"tenant", "code_data", "files_data"}
+	for _, mod := range modules {
+		schemaDir := filepath.Join("modules", mod, "schema")
+		if err := os.MkdirAll(schemaDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		content := fmt.Sprintf(`database(name="%s", version="1.0")`, mod)
+		if err := os.WriteFile(filepath.Join(schemaDir, "schema.star"), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s := New(false)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(schemas) != 3 {
+		t.Fatalf("Expected 3 schemas, got %d", len(schemas))
+	}
+}
+
+func TestScanner_ScanStarlarkModules_IgnoresYAML(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_star_no_yaml_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err = os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/module\n\ngo 1.21\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a schema.yaml file — this should NOT be found
+	schemaDir := filepath.Join("modules", "tenant", "schema")
+	if err := os.MkdirAll(schemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(schemaDir, "schema.yaml"), []byte("database:\n  name: tenant\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(schemas) != 0 {
+		t.Fatalf("Expected 0 schemas (YAML should be ignored), got %d", len(schemas))
 	}
 }
 

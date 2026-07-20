@@ -48,13 +48,13 @@ type SchemaFile struct {
 	Type       SchemaType
 }
 
-// SchemaType identifies the format of a discovered schema file (SQL or YAML).
+// SchemaType identifies the format of a discovered schema file (SQL or Starlark).
 type SchemaType string
 
 // SchemaType constants enumerate the supported schema file formats.
 const (
-	SchemaTypeSQL  SchemaType = "sql"
-	SchemaTypeYAML SchemaType = "yaml"
+	SchemaTypeSQL      SchemaType = "sql"
+	SchemaTypeStarlark SchemaType = "starlark"
 )
 
 // Scanner discovers schema files within a Go module directory tree.
@@ -74,9 +74,9 @@ func (s *Scanner) ScanModules() ([]SchemaFile, error) {
 	return s.ScanModulesWithType(SchemaTypeSQL)
 }
 
-// ScanYAMLModules discovers YAML schema files in the current module directory.
-func (s *Scanner) ScanYAMLModules() ([]SchemaFile, error) {
-	return s.ScanModulesWithType(SchemaTypeYAML)
+// ScanStarlarkModules discovers Starlark schema files in the current module directory.
+func (s *Scanner) ScanStarlarkModules() ([]SchemaFile, error) {
+	return s.ScanModulesWithType(SchemaTypeStarlark)
 }
 
 // ScanModulesWithType discovers schema files of the specified type in the current module directory.
@@ -183,9 +183,9 @@ func (s *Scanner) findAllSchemasInPathWithType(basePath, modulePath string, sche
 	case SchemaTypeSQL:
 		targetDirname = "sql"
 		targetFilename = "schema.sql"
-	case SchemaTypeYAML:
+	case SchemaTypeStarlark:
 		targetDirname = "schema"
-		targetFilename = "schema.yaml"
+		targetFilename = "schema.star"
 	default:
 		return nil, fmt.Errorf("unsupported schema type: %s", schemaType)
 	}
@@ -275,7 +275,7 @@ func (s *Scanner) readSchemaFileWithType(r io.Reader, schemaType SchemaType) (st
 				if strings.HasPrefix(strings.TrimSpace(line), "-- MIGRATION_SCHEMA") {
 					hasMarker = true
 				}
-			case SchemaTypeYAML:
+			case SchemaTypeStarlark:
 				// File name and path are enough
 				hasMarker = true
 			}

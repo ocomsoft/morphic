@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/ocomsoft/morphic/internal/ui"
+	"github.com/ocomsoft/morphic/internal/utils"
 	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 	"github.com/ocomsoft/morphic/migrate"
 )
@@ -294,6 +295,70 @@ func TestSchemaStateToYAMLSchema_WithTables(t *testing.T) {
 	}
 	if len(idx.Fields) != 1 || idx.Fields[0] != "name" {
 		t.Errorf("unexpected index fields: %v", idx.Fields)
+	}
+}
+
+// TestSchemaStateToYAMLSchema_LongFKConstraintNameRoundTrip guards the
+// constraint-name truncation round-trip. The migration writer stores FK
+// constraint names through utils.SafeConstraintName, which truncates+hashes any
+// name over 63 chars. schemaStateToYAMLSchema (the reader) must compute the
+// identical name, or FKs whose fk_<table>_<field> exceeds 63 chars never match
+// on reconstruction and are perpetually re-emitted as ChangeTypeForeignKeyAdded.
+func TestSchemaStateToYAMLSchema_LongFKConstraintNameRoundTrip(t *testing.T) {
+	const owningTable = "form_template_version_actions_submit"
+	const fkField = "form_template_version_id"
+	rawName := "fk_" + owningTable + "_" + fkField
+	if len(rawName) <= 63 {
+		t.Fatalf("test precondition: expected raw FK name >63 chars, got %d (%q)", len(rawName), rawName)
+	}
+
+	state := migrate.NewSchemaState()
+	if err := state.AddTable("form_template_version", []migrate.Field{
+		{Name: "id", Type: "uuid", PrimaryKey: true},
+	}, nil); err != nil {
+		t.Fatalf("AddTable target: %v", err)
+	}
+	if err := state.AddTable(owningTable, []migrate.Field{
+		{Name: "id", Type: "uuid", PrimaryKey: true},
+		{Name: fkField, Type: "foreign_key", ForeignKey: &migrate.ForeignKey{
+			Table: "form_template_version", OnDelete: "PROTECT",
+		}},
+	}, nil); err != nil {
+		t.Fatalf("AddTable owning: %v", err)
+	}
+
+	// The writer stores the constraint under the SafeConstraintName-truncated
+	// name; the reader must recompute the same truncated name to match it.
+	if err := state.AddForeignKey(owningTable, migrate.ForeignKeyConstraint{
+		Name:            utils.SafeConstraintName(rawName),
+		FieldName:       fkField,
+		ReferencedTable: "form_template_version",
+		OnDelete:        "PROTECT",
+	}); err != nil {
+		t.Fatalf("AddForeignKey: %v", err)
+	}
+
+	result := schemaStateToYAMLSchema(state, "postgresql")
+	found := false
+	for _, tbl := range result.Tables {
+		if tbl.Name != owningTable {
+			continue
+		}
+		for _, fld := range tbl.Fields {
+			if fld.Name != fkField {
+				continue
+			}
+			found = true
+			if fld.ForeignKey == nil {
+				t.Fatalf("long-named FK (%d chars) not reconstructed — writer/reader constraint-name round-trip is broken", len(rawName))
+			}
+			if fld.ForeignKey.Table != "form_template_version" {
+				t.Errorf("expected FK target 'form_template_version', got %q", fld.ForeignKey.Table)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("field %q not found in reconstructed table %q", fkField, owningTable)
 	}
 }
 

@@ -40,6 +40,7 @@ import (
 	"github.com/ocomsoft/morphic/internal/interp"
 	"github.com/ocomsoft/morphic/internal/types"
 	"github.com/ocomsoft/morphic/internal/ui"
+	"github.com/ocomsoft/morphic/internal/utils"
 	"github.com/ocomsoft/morphic/internal/workflow"
 	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 	"github.com/ocomsoft/morphic/migrate"
@@ -394,7 +395,12 @@ func schemaStateToYAMLSchema(state *migrate.SchemaState, dbType string) *yamlpkg
 				// AddForeignKey support was introduced), leave ForeignKey nil so the
 				// diff engine detects the missing constraint and emits
 				// ChangeTypeForeignKeyAdded.
-				constraintName := fmt.Sprintf("fk_%s_%s", ts.Name, f.Name)
+				// Compute the constraint name through the same SafeConstraintName
+				// helper the generator/writer uses (internal/codegen), so long
+				// names (>63 chars) that the writer truncates+hashes match here on
+				// reconstruction. Without this, a raw name never equals the stored
+				// truncated name and the FK is perpetually re-emitted as "added".
+				constraintName := utils.SafeConstraintName(fmt.Sprintf("fk_%s_%s", ts.Name, f.Name))
 				for _, fkc := range ts.ForeignKeys {
 					if fkc.Name == constraintName {
 						yf.ForeignKey = &yamlpkg.ForeignKey{

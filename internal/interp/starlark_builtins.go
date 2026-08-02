@@ -920,7 +920,10 @@ func starlarkToGoValue(v starlark.Value) any {
 		return float64(x)
 	case starlark.Bool:
 		return bool(x)
-	case *starlark.NoneType:
+	// starlark.None is a value type (type NoneType byte), not a pointer, so this
+	// case must not be *starlark.NoneType — that never matches and lets None fall
+	// through to the default branch, which stringifies it to the literal "None".
+	case starlark.NoneType:
 		return nil
 	case *starlark.Dict:
 		return dictToGoMap(x)

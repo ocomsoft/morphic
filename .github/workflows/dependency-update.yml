@@ -78,10 +78,21 @@ jobs:
         git add go.mod go.sum
         git commit -m 'chore: update Go dependencies'
 
-        # Force-with-lease: the branch is a disposable snapshot of "latest
-        # dependencies as of this run", so each run replaces the previous one.
-        # --force-with-lease still refuses if someone else has pushed to it.
-        git push --force-with-lease origin "$BRANCH"
+        # The branch is a disposable snapshot of "latest dependencies as of this
+        # run", so each run replaces the previous one. --force-with-lease keeps
+        # that safe: it refuses if someone else pushed to the branch since we
+        # looked.
+        #
+        # It needs a remote-tracking ref to compare against, and
+        # actions/checkout fetches only the default branch - without this fetch
+        # the push is rejected with "stale info" even though nothing is wrong.
+        if git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/null; then
+          EXPECTED=$(git rev-parse "refs/remotes/origin/$BRANCH")
+          git push --force-with-lease="$BRANCH:$EXPECTED" origin "HEAD:refs/heads/$BRANCH"
+        else
+          # Branch does not exist on the remote yet; nothing to lease against.
+          git push origin "HEAD:refs/heads/$BRANCH"
+        fi
 
         echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 

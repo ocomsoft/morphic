@@ -721,3 +721,84 @@ func TestStarlarkBuiltin_Migration_InitialDefaultsFalse(t *testing.T) {
 		t.Error("expected Initial to default to false")
 	}
 }
+
+// TestStarlarkToGoValue_Scalars guards the scalar conversions, in particular None.
+// The None case was previously written as *starlark.NoneType; because starlark.None
+// is a value (type NoneType byte) and not a pointer, that case never matched and
+// None fell through to the default branch, which stringified it to the literal
+// "None" instead of converting it to nil (SQL NULL).
+func TestStarlarkToGoValue_Scalars(t *testing.T) {
+	tests := []struct {
+		name string
+		in   starlark.Value
+		want any
+	}{
+		{"string", starlark.String("hello"), "hello"},
+		{"int", starlark.MakeInt(42), int64(42)},
+		{"float", starlark.Float(1.5), 1.5},
+		{"bool", starlark.Bool(true), true},
+		{"none", starlark.None, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := starlarkToGoValue(tt.in)
+			if got != tt.want {
+				t.Errorf("starlarkToGoValue(%v) = %#v (%T), want %#v", tt.in, got, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStarlarkBuiltin_UpsertData_NoneIsNil covers the end-to-end path that broke:
+// a None in an upsert row must reach the migration as a nil so it is emitted as
+// SQL NULL. Written as the literal string "None" it fails against a timestamp
+// column and, worse, silently stores "None" in a nullable text column.
+func TestStarlarkBuiltin_UpsertData_NoneIsNil(t *testing.T) {
+	b := execStar(t, `
+migration(
+    name = "0002_seed",
+    dependencies = ["0001_initial"],
+    operations = [
+        upsert_data(
+            table = "code_core_layout",
+            conflict_keys = ["id"],
+            rows = [
+                row(id = "1", code = "C", active_end_date = None, original_file_name = None),
+            ],
+        ),
+    ],
+)
+`)
+
+	m := b.Collected()
+	if m == nil {
+		t.Fatal("no migration collected")
+	}
+	if len(m.Operations) != 1 {
+		t.Fatalf("expected 1 operation, got %d", len(m.Operations))
+	}
+
+	ud, ok := m.Operations[0].(*migrate.UpsertData)
+	if !ok {
+		t.Fatalf("expected *migrate.UpsertData, got %T", m.Operations[0])
+	}
+	if len(ud.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(ud.Rows))
+	}
+
+	for _, col := range []string{"active_end_date", "original_file_name"} {
+		v, present := ud.Rows[0][col]
+		if !present {
+			t.Fatalf("column %q missing from row", col)
+		}
+		if v != nil {
+			t.Errorf("row[%q] = %#v (%T), want nil", col, v, v)
+		}
+	}
+
+	// Non-None values in the same row must be unaffected.
+	if ud.Rows[0]["code"] != "C" {
+		t.Errorf("row[\"code\"] = %#v, want \"C\"", ud.Rows[0]["code"])
+	}
+}

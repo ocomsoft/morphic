@@ -1,6 +1,6 @@
 module github.com/ocomsoft/morphic
 
-go 1.25.11
+go 1.25.12
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -16,7 +16,7 @@ require (
 	github.com/traefik/yaegi v0.16.1
 	go.starlark.net v0.0.0-20260630144053-529d8e869a14
 	golang.org/x/mod v0.37.0
-	golang.org/x/text v0.38.0
+	golang.org/x/text v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

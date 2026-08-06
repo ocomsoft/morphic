@@ -49,12 +49,13 @@ import (
 // Flag variables for the go_migrations command. These are prefixed with goMig
 // to avoid conflicts with the root command flag variables.
 var (
-	goMigDryRun  bool
-	goMigCheck   bool
-	goMigMerge   bool
-	goMigName    string
-	goMigVerbose bool
-	goMigFormat  string
+	goMigDryRun      bool
+	goMigCheck       bool
+	goMigMerge       bool
+	goMigName        string
+	goMigVerbose     bool
+	goMigAutoApprove bool
+	goMigFormat      string
 )
 
 // goMigrationsCmd is the Cobra command for generating Starlark migration files
@@ -92,6 +93,8 @@ func init() {
 		"Custom migration name suffix")
 	goMigrationsCmd.Flags().BoolVar(&goMigVerbose, "verbose", false,
 		"Show detailed output")
+	goMigrationsCmd.Flags().BoolVar(&goMigAutoApprove, "auto-approve", false,
+		"Automatically approve all destructive operations without prompting (for CI/non-TTY environments)")
 	goMigrationsCmd.Flags().StringVar(&goMigFormat, "format", "",
 		"Output format: go or starlark (overrides config)")
 }
@@ -215,7 +218,7 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	name := BuildMigrationName(count, goMigName, diffEngine.GenerateMigrationName(diff))
 
 	// 7. Prompt for destructive operations and build per-change decisions.
-	decisions, err := promptGoMigDecisions(diff)
+	decisions, err := promptGoMigDecisions(diff, goMigAutoApprove)
 	if err != nil {
 		return err // includes user-requested exit
 	}
@@ -301,7 +304,10 @@ func printChangeList(changes []yamlpkg.Change) {
 // If the user chooses PromptOmit the generated operation will have SchemaOnly: true
 // (schema state advances but no SQL is executed). If the user chooses PromptExit
 // an error is returned and migration generation is cancelled.
-func promptGoMigDecisions(diff *yamlpkg.SchemaDiff) (map[int]yamlpkg.PromptResponse, error) {
+//
+// When autoApprove is true, all destructive operations are automatically approved
+// without prompting (for use in CI/CD or non-TTY environments).
+func promptGoMigDecisions(diff *yamlpkg.SchemaDiff, autoApprove bool) (map[int]yamlpkg.PromptResponse, error) {
 	decisions := make(map[int]yamlpkg.PromptResponse)
 	applyAll := yamlpkg.PromptResponse(0)
 	applyByType := make(map[yamlpkg.ChangeType]yamlpkg.PromptResponse)
@@ -324,6 +330,13 @@ func promptGoMigDecisions(diff *yamlpkg.SchemaDiff) (map[int]yamlpkg.PromptRespo
 			title = fmt.Sprintf("Destructive: %s on %q (field: %q)", change.Type, change.TableName, change.FieldName)
 		} else {
 			title = fmt.Sprintf("Destructive: %s on %q", change.Type, change.TableName)
+		}
+
+		// In auto-approve mode, generate all destructive operations without prompting.
+		if autoApprove {
+			fmt.Printf("Auto-approving: %s\n", title)
+			decisions[i] = yamlpkg.PromptGenerate
+			continue
 		}
 
 		resp, scope, err := ui.RunDestructivePrompt(title, change.Type)

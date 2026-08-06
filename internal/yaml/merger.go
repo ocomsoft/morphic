@@ -25,6 +25,7 @@ package yaml
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/fatih/color"
 
@@ -129,10 +130,10 @@ func (m *Merger) mergeTables(tableName string, tables []Table) (*Table, error) {
 		return &tables[0], nil
 	}
 
-	color.Yellow("Warning: merging %d definitions for table: %s\n", len(tables), tableName)
+	_, _ = fmt.Fprint(os.Stderr, color.YellowString("Warning: merging %d definitions for table: %s\n", len(tables), tableName))
 	for _, t := range tables {
 		if t.SourceFile != "" {
-			color.Yellow("  - %s\n", t.SourceFile)
+			_, _ = fmt.Fprint(os.Stderr, color.YellowString("  - %s\n", t.SourceFile))
 		}
 	}
 

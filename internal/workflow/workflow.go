@@ -231,7 +231,8 @@ func ExecuteDumpSQL(cmd *cobra.Command, databaseType string, pending bool, verbo
 	}
 
 	// Scan and parse schemas
-	allSchemas, err := ScanAndParseSchemas(components, false)
+	cfg := config.LoadOrDefault(configFile)
+	allSchemas, err := ScanAndParseSchemas(components, false, cfg)
 	if err != nil {
 		if err.Error() == "no schema files found" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No schema files found. Nothing to dump.\n")

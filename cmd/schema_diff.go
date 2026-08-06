@@ -102,7 +102,7 @@ func runDiff(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid database type: %w", err)
 	}
 	components := workflow.InitializeSchemaComponents(dbType, diffVerbose)
-	allSchemas, err := workflow.ScanAndParseSchemas(components, diffVerbose)
+	allSchemas, err := workflow.ScanAndParseSchemas(components, diffVerbose, cfg)
 	if err != nil {
 		return fmt.Errorf("parsing schema: %w", err)
 	}

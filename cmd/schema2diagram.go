@@ -35,6 +35,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
+	"github.com/ocomsoft/morphic/internal/config"
 	"github.com/ocomsoft/morphic/internal/types"
 	"github.com/ocomsoft/morphic/internal/workflow"
 )
@@ -120,7 +121,8 @@ func runSchema2Diagram(cmd *cobra.Command, args []string) error {
 	}
 
 	// Scan and parse schemas using shared function
-	allSchemas, err := workflow.ScanAndParseSchemas(components, verbose)
+	cfg := config.LoadOrDefault(cfgFile)
+	allSchemas, err := workflow.ScanAndParseSchemas(components, verbose, cfg)
 	if err != nil {
 		if err.Error() == "no schema files found" {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "No schema files found. Nothing to document.\n")

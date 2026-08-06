@@ -93,6 +93,9 @@ func (g *StarlarkGenerator) GenerateMigration(
 			return "", fmt.Errorf("generating operation for change %s on %s: %w",
 				change.Type, change.TableName, err)
 		}
+		if change.Destructive {
+			fmt.Fprintf(&b, "        # DESTRUCTIVE: %s\n", change.Description)
+		}
 		if review {
 			b.WriteString("        # REVIEW: destructive operation — verify before running\n")
 		}

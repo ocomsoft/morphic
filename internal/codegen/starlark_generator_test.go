@@ -389,3 +389,72 @@ func assertContains(t *testing.T, s, substr string) {
 		t.Errorf("expected output to contain %q\nGot:\n%s", substr, s)
 	}
 }
+
+func TestStarlarkGenerator_DestructiveComment_DropTable(t *testing.T) {
+	gen := codegen.NewStarlarkGenerator()
+	diff := &yaml.SchemaDiff{
+		HasChanges: true,
+		Changes: []yaml.Change{
+			{
+				Type:        yaml.ChangeTypeTableRemoved,
+				TableName:   "old_table",
+				Destructive: true,
+				Description: "Remove table 'old_table'",
+			},
+		},
+	}
+
+	src, err := gen.GenerateMigration("0003_drop", nil, diff, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateMigration: %v", err)
+	}
+	assertContains(t, src, `# DESTRUCTIVE: Remove table 'old_table'`)
+	assertContains(t, src, `drop_table("old_table")`)
+}
+
+func TestStarlarkGenerator_DestructiveComment_DropField(t *testing.T) {
+	gen := codegen.NewStarlarkGenerator()
+	diff := &yaml.SchemaDiff{
+		HasChanges: true,
+		Changes: []yaml.Change{
+			{
+				Type:        yaml.ChangeTypeFieldRemoved,
+				TableName:   "users",
+				FieldName:   "legacy_col",
+				Destructive: true,
+				Description: "Remove field 'users.legacy_col'",
+			},
+		},
+	}
+
+	src, err := gen.GenerateMigration("0004_drop_col", nil, diff, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateMigration: %v", err)
+	}
+	assertContains(t, src, `# DESTRUCTIVE: Remove field 'users.legacy_col'`)
+	assertContains(t, src, `drop_field("users", "legacy_col")`)
+}
+
+func TestStarlarkGenerator_NoDestructiveComment_NonDestructive(t *testing.T) {
+	gen := codegen.NewStarlarkGenerator()
+	diff := &yaml.SchemaDiff{
+		HasChanges: true,
+		Changes: []yaml.Change{
+			{
+				Type:        yaml.ChangeTypeFieldAdded,
+				TableName:   "users",
+				FieldName:   "phone",
+				Destructive: false,
+				NewValue:    yaml.Field{Name: "phone", Type: "varchar", Length: 20, Nullable: boolPtr(true)},
+			},
+		},
+	}
+
+	src, err := gen.GenerateMigration("0005_add_phone", nil, diff, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateMigration: %v", err)
+	}
+	if strings.Contains(src, "# DESTRUCTIVE") {
+		t.Errorf("non-destructive operation should not have DESTRUCTIVE comment")
+	}
+}

@@ -218,7 +218,9 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	// 5. Check for unresolved branches (warn if present and not doing merge).
 	// HasUnresolvedBranches is true only when there are multiple leaf migrations —
 	// resolved diamond topologies (already merged) do not trigger this warning.
-	if dagOut != nil && dagOut.HasUnresolvedBranches && !goMigMerge {
+	// The warning is plain text, so it is suppressed under --json to avoid
+	// corrupting the JSON stream on stdout.
+	if dagOut != nil && dagOut.HasUnresolvedBranches && !goMigMerge && !goMigJSON {
 		fmt.Println("WARNING: Multiple migration branches detected — merge required.")
 		for i, leaf := range dagOut.Leaves {
 			fmt.Printf("  Branch %d: %s\n", i+1, leaf)
@@ -226,7 +228,20 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 		fmt.Println("Run 'morphic generate --merge' to generate a merge migration.")
 	}
 
+	deps := []string{}
+	if dagOut != nil {
+		deps = dagOut.Leaves
+	}
+
 	if !diff.HasChanges {
+		if goMigDryRun && goMigJSON {
+			// Emit a valid, empty JSON report rather than falling through to the
+			// plain-text message so --dry-run --json consumers always get JSON.
+			if err := writeDryRunJSON(os.Stdout, "", deps, diff, ""); err != nil {
+				return fmt.Errorf("writing JSON report: %w", err)
+			}
+			return nil
+		}
 		fmt.Println("No changes detected.")
 		return nil
 	}
@@ -237,10 +252,6 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	}
 
 	// 6. Determine next migration name
-	deps := []string{}
-	if dagOut != nil {
-		deps = dagOut.Leaves
-	}
 	count := len(migFiles)
 	name := BuildMigrationName(count, goMigName, diffEngine.GenerateMigrationName(diff))
 

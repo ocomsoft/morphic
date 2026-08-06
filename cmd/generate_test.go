@@ -117,6 +117,46 @@ func TestDryRunJSON_Structure(t *testing.T) {
 	}
 }
 
+// TestDryRunJSON_NoChanges verifies that writeDryRunJSON produces a valid JSON
+// report with an empty changes array and has_destructive=false when given a
+// diff with no changes. This is a regression test for the --dry-run --json
+// "no changes" path, which previously fell through to a plain-text message
+// instead of emitting JSON, breaking jq-based consumers.
+func TestDryRunJSON_NoChanges(t *testing.T) {
+	diff := &yamlpkg.SchemaDiff{
+		HasChanges:    false,
+		IsDestructive: false,
+		Changes:       nil,
+	}
+
+	var buf bytes.Buffer
+	err := writeDryRunJSON(&buf, "", []string{}, diff, "")
+	if err != nil {
+		t.Fatalf("writeDryRunJSON: %v", err)
+	}
+
+	var report DryRunReport
+	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
+		t.Fatalf("JSON unmarshal: %v", err)
+	}
+
+	if report.HasDestructive {
+		t.Error("expected has_destructive=false for a no-changes diff")
+	}
+	if report.DestructiveCount != 0 {
+		t.Errorf("expected destructive_count=0, got %d", report.DestructiveCount)
+	}
+	if report.Changes == nil {
+		t.Error("expected changes to be an empty slice, not nil")
+	}
+	if len(report.Changes) != 0 {
+		t.Errorf("expected 0 changes, got %d", len(report.Changes))
+	}
+	if report.Dependencies == nil {
+		t.Error("expected dependencies to be an empty slice, not nil")
+	}
+}
+
 // TestTypeMappingsSurvivedMergeAndDiffDetection is a regression test for the
 // bug where TypeMappings in a schema.yaml were silently dropped by MergeSchemas,
 // causing morphic generate to report "No changes detected" even when type_mappings

@@ -136,6 +136,7 @@ func (p *Parser) ValidateForeignKeyReferences(schema *Schema) error {
 					"SET_NULL":    true,
 					"PROTECT":     true,
 					"SET_DEFAULT": true,
+					"NO_ACTION":   true,
 				}
 				if field.ForeignKey.OnDelete != "" && !validOnDelete[field.ForeignKey.OnDelete] {
 					return fmt.Errorf("table %s, field %s: invalid on_delete value: %s",

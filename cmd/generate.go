@@ -256,7 +256,7 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	name := BuildMigrationName(count, goMigName, diffEngine.GenerateMigrationName(diff))
 
 	// 7. Prompt for destructive operations and build per-change decisions.
-	decisions, err := promptGoMigDecisions(diff, goMigAutoApprove)
+	decisions, err := promptGoMigDecisions(diff, goMigAutoApprove || goMigDryRun)
 	if err != nil {
 		return err // includes user-requested exit
 	}
@@ -454,7 +454,7 @@ func promptGoMigDecisions(diff *yamlpkg.SchemaDiff, autoApprove bool) (map[int]y
 
 		// In auto-approve mode, generate all destructive operations without prompting.
 		if autoApprove {
-			fmt.Printf("Auto-approving: %s\n", title)
+			fmt.Fprintf(os.Stderr, "Auto-approving: %s\n", title)
 			decisions[i] = yamlpkg.PromptGenerate
 			continue
 		}

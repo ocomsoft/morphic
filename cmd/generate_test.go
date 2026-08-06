@@ -24,6 +24,8 @@ SOFTWARE.
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +36,86 @@ import (
 	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 	"github.com/ocomsoft/morphic/migrate"
 )
+
+func TestPrintChangeList_WithDestructiveMarkers(t *testing.T) {
+	changes := []yamlpkg.Change{
+		{Type: yamlpkg.ChangeTypeTableAdded, TableName: "users"},
+		{Type: yamlpkg.ChangeTypeTableRemoved, TableName: "posts", Destructive: true},
+		{Type: yamlpkg.ChangeTypeFieldRemoved, TableName: "users", FieldName: "old_col", Destructive: true},
+	}
+
+	var buf bytes.Buffer
+	printChangeListTo(&buf, changes, true)
+	out := buf.String()
+
+	if !strings.Contains(out, "[DESTRUCTIVE]") {
+		t.Error("expected [DESTRUCTIVE] marker in output")
+	}
+	if !strings.Contains(out, "Tables added") {
+		t.Error("expected 'Tables added' in output")
+	}
+	if !strings.Contains(out, "Tables removed") {
+		t.Error("expected 'Tables removed' in output")
+	}
+}
+
+func TestPrintChangeList_WithoutDestructiveMarkers(t *testing.T) {
+	changes := []yamlpkg.Change{
+		{Type: yamlpkg.ChangeTypeTableRemoved, TableName: "posts", Destructive: true},
+	}
+
+	var buf bytes.Buffer
+	printChangeListTo(&buf, changes, false)
+	out := buf.String()
+
+	if strings.Contains(out, "[DESTRUCTIVE]") {
+		t.Error("showDestructive=false should not include [DESTRUCTIVE] marker")
+	}
+}
+
+func TestDryRunJSON_Structure(t *testing.T) {
+	diff := &yamlpkg.SchemaDiff{
+		HasChanges:    true,
+		IsDestructive: true,
+		Changes: []yamlpkg.Change{
+			{Type: yamlpkg.ChangeTypeTableRemoved, TableName: "posts", Destructive: true, Description: "Remove table 'posts'"},
+			{Type: yamlpkg.ChangeTypeFieldAdded, TableName: "users", FieldName: "phone", Destructive: false, Description: "Add field 'users.phone'"},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := writeDryRunJSON(&buf, "0003_remove_posts", []string{"0002_initial"}, diff, "migration(...)")
+	if err != nil {
+		t.Fatalf("writeDryRunJSON: %v", err)
+	}
+
+	var report DryRunReport
+	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
+		t.Fatalf("JSON unmarshal: %v", err)
+	}
+
+	if report.MigrationName != "0003_remove_posts" {
+		t.Errorf("expected migration_name '0003_remove_posts', got %q", report.MigrationName)
+	}
+	if !report.HasDestructive {
+		t.Error("expected has_destructive=true")
+	}
+	if report.DestructiveCount != 1 {
+		t.Errorf("expected destructive_count=1, got %d", report.DestructiveCount)
+	}
+	if len(report.Changes) != 2 {
+		t.Fatalf("expected 2 changes, got %d", len(report.Changes))
+	}
+	if !report.Changes[0].Destructive {
+		t.Error("first change should be destructive")
+	}
+	if report.Changes[1].Destructive {
+		t.Error("second change should not be destructive")
+	}
+	if report.Source != "migration(...)" {
+		t.Errorf("expected source 'migration(...)', got %q", report.Source)
+	}
+}
 
 // TestTypeMappingsSurvivedMergeAndDiffDetection is a regression test for the
 // bug where TypeMappings in a schema.yaml were silently dropped by MergeSchemas,

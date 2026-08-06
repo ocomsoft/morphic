@@ -26,7 +26,9 @@ SOFTWARE.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,8 +57,28 @@ var (
 	goMigName        string
 	goMigVerbose     bool
 	goMigAutoApprove bool
+	goMigJSON        bool
 	goMigFormat      string
 )
+
+// DryRunReport is the JSON structure emitted by --dry-run --json.
+type DryRunReport struct {
+	MigrationName    string         `json:"migration_name"`
+	Dependencies     []string       `json:"dependencies"`
+	HasDestructive   bool           `json:"has_destructive"`
+	DestructiveCount int            `json:"destructive_count"`
+	Changes          []DryRunChange `json:"changes"`
+	Source           string         `json:"source"`
+}
+
+// DryRunChange is a single change entry in the dry-run JSON report.
+type DryRunChange struct {
+	Type        string `json:"type"`
+	Table       string `json:"table"`
+	Field       string `json:"field,omitempty"`
+	Destructive bool   `json:"destructive"`
+	Description string `json:"description"`
+}
 
 // goMigrationsCmd is the Cobra command for generating Starlark migration files
 // from schema changes. It compares the current schema against the reconstructed
@@ -95,6 +117,8 @@ func init() {
 		"Show detailed output")
 	goMigrationsCmd.Flags().BoolVar(&goMigAutoApprove, "auto-approve", false,
 		"Automatically approve all destructive operations without prompting (for CI/non-TTY environments)")
+	goMigrationsCmd.Flags().BoolVar(&goMigJSON, "json", false,
+		"Output dry-run results as JSON (requires --dry-run)")
 	goMigrationsCmd.Flags().StringVar(&goMigFormat, "format", "",
 		"Output format: go or starlark (overrides config)")
 }
@@ -108,6 +132,9 @@ func init() {
 //  5. Generate a new .star migration file (or merge migration if --merge is set)
 func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(cfgFile)
+	if goMigJSON && !goMigDryRun {
+		return fmt.Errorf("--json requires --dry-run")
+	}
 	migrationsDir := cfg.Migration.Directory
 
 	// Override format from --format flag if provided.
@@ -230,7 +257,16 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	}
 
 	if goMigDryRun {
-		fmt.Println(src)
+		if goMigJSON {
+			if err := writeDryRunJSON(os.Stdout, name, deps, diff, src); err != nil {
+				return fmt.Errorf("writing JSON report: %w", err)
+			}
+		} else {
+			printDryRunSummary(name, diff, src)
+		}
+		if diff.IsDestructive {
+			os.Exit(1)
+		}
 		return nil
 	}
 
@@ -246,16 +282,22 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// printChangeList prints a human-readable summary of schema changes grouped by type.
-func printChangeList(changes []yamlpkg.Change) {
+// printChangeListTo writes a human-readable summary of schema changes grouped by type.
+// When showDestructive is true, groups containing destructive changes are tagged with
+// [DESTRUCTIVE].
+func printChangeListTo(w io.Writer, changes []yamlpkg.Change, showDestructive bool) {
 	type entry struct {
 		table string
 		field string
 		desc  string
 	}
 	groups := make(map[yamlpkg.ChangeType][]entry)
+	destructiveTypes := make(map[yamlpkg.ChangeType]bool)
 	for _, c := range changes {
 		groups[c.Type] = append(groups[c.Type], entry{c.TableName, c.FieldName, c.Description})
+		if c.Destructive {
+			destructiveTypes[c.Type] = true
+		}
 	}
 
 	labels := []struct {
@@ -277,22 +319,89 @@ func printChangeList(changes []yamlpkg.Change) {
 		{yamlpkg.ChangeTypeTypeMappingsModified, "Type mappings modified"},
 	}
 
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
 	for _, l := range labels {
 		entries, ok := groups[l.ct]
 		if !ok {
 			continue
 		}
-		fmt.Printf("  %s (%d):\n", l.label, len(entries))
+		marker := ""
+		if showDestructive && destructiveTypes[l.ct] {
+			marker = "  [DESTRUCTIVE]"
+		}
+		_, _ = fmt.Fprintf(w, "  %s (%d):%s\n", l.label, len(entries), marker)
 		for _, e := range entries {
 			if e.field != "" {
-				fmt.Printf("    - %s.%s\n", e.table, e.field)
+				_, _ = fmt.Fprintf(w, "    - %s.%s\n", e.table, e.field)
 			} else {
-				fmt.Printf("    - %s\n", e.table)
+				_, _ = fmt.Fprintf(w, "    - %s\n", e.table)
 			}
 		}
 	}
-	fmt.Println()
+	_, _ = fmt.Fprintln(w)
+}
+
+// printChangeList prints a human-readable change summary to stdout without
+// destructive markers (used in the normal generation flow).
+func printChangeList(changes []yamlpkg.Change) {
+	printChangeListTo(os.Stdout, changes, false)
+}
+
+// writeDryRunJSON writes the dry-run report as JSON to w.
+func writeDryRunJSON(w io.Writer, name string, deps []string, diff *yamlpkg.SchemaDiff, src string) error {
+	report := DryRunReport{
+		MigrationName:  name,
+		Dependencies:   deps,
+		HasDestructive: diff.IsDestructive,
+		Changes:        make([]DryRunChange, 0, len(diff.Changes)),
+		Source:         src,
+	}
+	if report.Dependencies == nil {
+		report.Dependencies = []string{}
+	}
+	for _, c := range diff.Changes {
+		if c.Destructive {
+			report.DestructiveCount++
+		}
+		report.Changes = append(report.Changes, DryRunChange{
+			Type:        string(c.Type),
+			Table:       c.TableName,
+			Field:       c.FieldName,
+			Destructive: c.Destructive,
+			Description: c.Description,
+		})
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(report)
+}
+
+// printDryRunSummary prints the full human-readable dry-run output: change
+// summary with destructive markers, a destructive warning section, and the
+// annotated migration source.
+func printDryRunSummary(name string, diff *yamlpkg.SchemaDiff, src string) {
+	fmt.Printf("Morphic Dry Run: %s\n", name)
+	fmt.Printf("\nChanges (%d):\n", len(diff.Changes))
+	printChangeListTo(os.Stdout, diff.Changes, true)
+
+	// Destructive warning section.
+	var destructive []yamlpkg.Change
+	for _, c := range diff.Changes {
+		if c.Destructive {
+			destructive = append(destructive, c)
+		}
+	}
+	if len(destructive) > 0 {
+		fmt.Printf("WARNING: %d destructive operation(s) detected:\n", len(destructive))
+		for _, c := range destructive {
+			fmt.Printf("  - %s\n", c.Description)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("--- Migration Source ---")
+	fmt.Println(src)
 }
 
 // promptGoMigDecisions iterates through diff.Changes and, for each destructive

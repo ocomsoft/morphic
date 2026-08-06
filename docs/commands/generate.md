@@ -333,26 +333,89 @@ morphic generate --name "Add User Preferences"
 
 ### Dry Run
 
-Preview the generated Go source without writing a file:
+Preview what the migration will do without writing a file. The output includes a
+change summary with destructive operations flagged, followed by the annotated
+migration source:
 
 ```bash
 morphic generate --dry-run
 ```
 
-```python
+```
+Morphic Dry Run: 0002_remove_sessions
+
+Changes (3):
+
+  Tables removed (1):  [DESTRUCTIVE]
+    - sessions
+  Fields added (1):
+    - users.phone
+  Fields removed (1):  [DESTRUCTIVE]
+    - users.old_email
+
+WARNING: 2 destructive operation(s) detected:
+  - Remove table 'sessions'
+  - Remove field 'users.old_email'
+
+--- Migration Source ---
 migration(
-    name = "0002_add_products",
+    name = "0002_remove_sessions",
     dependencies = ["0001_initial"],
     operations = [
-        create_table("products",
-            fields = [
-                uuid("id", primary_key = True),
-                string("name", length = 255),
-            ],
-        ),
+        # DESTRUCTIVE: Remove table 'sessions'
+        drop_table("sessions"),
+        add_field("users", varchar("phone", 20, nullable = True)),
+        # DESTRUCTIVE: Remove field 'users.old_email'
+        drop_field("users", "old_email"),
     ],
 )
 ```
+
+**Exit codes:** `--dry-run` exits with code **0** when no destructive operations
+are present, and code **1** when destructive operations are detected. This
+allows CI pipelines to gate on destructive changes without parsing the output.
+
+### Dry Run with JSON Output
+
+For machine-readable output (useful for AI agents and automation):
+
+```bash
+morphic generate --dry-run --json
+```
+
+```json
+{
+  "migration_name": "0002_remove_sessions",
+  "dependencies": ["0001_initial"],
+  "has_destructive": true,
+  "destructive_count": 2,
+  "changes": [
+    {
+      "type": "table_removed",
+      "table": "sessions",
+      "destructive": true,
+      "description": "Remove table 'sessions'"
+    },
+    {
+      "type": "field_added",
+      "table": "users",
+      "field": "phone",
+      "destructive": false,
+      "description": "Add field 'users.phone'"
+    },
+    {
+      "type": "field_removed",
+      "table": "users",
+      "field": "old_email",
+      "destructive": true,
+      "description": "Remove field 'users.old_email'"
+    }
+  ],
+  "source": "migration(\n    name = \"0002_remove_sessions\",\n    ..."
+}
+```
+
+The same exit code rules apply: code 1 if `has_destructive` is true.
 
 ### CI/CD Check Mode
 

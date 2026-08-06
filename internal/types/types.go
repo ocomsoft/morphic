@@ -111,9 +111,10 @@ func (tm TypeMappings) SetForProvider(dbType DatabaseType, mappings map[string]s
 
 // Table represents a database table definition
 type Table struct {
-	Name    string  `yaml:"name"`
-	Fields  []Field `yaml:"fields"`
-	Indexes []Index `yaml:"indexes,omitempty"`
+	Name       string  `yaml:"name"`
+	Fields     []Field `yaml:"fields"`
+	Indexes    []Index `yaml:"indexes,omitempty"`
+	SourceFile string  `yaml:"-"`
 }
 
 // Field represents a database field/column definition

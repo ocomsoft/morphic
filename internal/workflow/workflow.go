@@ -142,6 +142,11 @@ func ScanAndParseSchemas(components *SchemaComponents, verbose bool, cfg ...*con
 			return nil, fmt.Errorf("loading schema failed for %s: %w", file.ModulePath, err)
 		}
 
+		// Stamp each table with its source file for merge warnings.
+		for i := range schema.Tables {
+			schema.Tables[i].SourceFile = file.FilePath
+		}
+
 		// Run basic structure validation but continue if it fails
 		if err := components.Parser.ValidateSchemaStructure(schema); err != nil {
 			color.Yellow("Structure validation warning for %s: %v\n", file.ModulePath, err)

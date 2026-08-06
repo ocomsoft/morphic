@@ -61,7 +61,7 @@ func (m *Merger) MergeSchemas(schemas []*Schema) (*Schema, error) {
 		Tables:       make([]Table, 0),
 	}
 
-	// Collect all tables from all schemas
+	// Collect all tables from all schemas.
 	tableMap := make(map[string][]Table)
 	for _, schema := range schemas {
 		for _, table := range schema.Tables {
@@ -130,6 +130,11 @@ func (m *Merger) mergeTables(tableName string, tables []Table) (*Table, error) {
 	}
 
 	color.Yellow("Warning: merging %d definitions for table: %s\n", len(tables), tableName)
+	for _, t := range tables {
+		if t.SourceFile != "" {
+			color.Yellow("  - %s\n", t.SourceFile)
+		}
+	}
 
 	merged := &Table{
 		Name:   tableName,

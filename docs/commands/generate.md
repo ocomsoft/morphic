@@ -273,13 +273,18 @@ When `schema_only = True` is set on an operation, the runner treats the table or
 
 ### Skipping the Prompt
 
-Use `--silent` to auto-accept all destructive operations as **Generate** without prompting:
+Use `--auto-approve` to auto-accept all destructive operations as **Generate** without prompting:
 
 ```bash
-morphic generate --silent
+morphic generate --auto-approve
 ```
 
-This is equivalent to always choosing option 1. Useful in automated or non-interactive environments.
+This is equivalent to always choosing option 1. Useful in CI/CD or non-interactive
+environments. Combine with `--dry-run` to preview what would be auto-approved:
+
+```bash
+morphic generate --dry-run --auto-approve
+```
 
 ## Field Type Reference
 

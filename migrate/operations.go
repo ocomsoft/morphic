@@ -309,10 +309,14 @@ func (op *RenameTable) Mutate(state *SchemaState) error {
 // (via Mutate) but does not execute any SQL, allowing the schema state to be
 // seeded from an existing database without running ALTER TABLE ADD COLUMN.
 type AddField struct {
-	Table      string
-	Field      Field
-	SchemaOnly bool // when true, Up/Down return no SQL; Mutate still runs
+	Table        string
+	Field        Field
+	SchemaOnly   bool // when true, Up/Down return no SQL; Mutate still runs
+	IgnoreErrors bool // when true, runner logs a warning and continues on SQL failure
 }
+
+// ShouldIgnoreErrors implements ErrorIgnorer.
+func (op *AddField) ShouldIgnoreErrors() bool { return op.IgnoreErrors }
 
 // TypeName returns the operation type identifier.
 func (op *AddField) TypeName() string { return "add_field" }
@@ -546,9 +550,13 @@ func (op *RenameField) Mutate(state *SchemaState) error {
 
 // AddIndex is a migration operation that adds an index to an existing table.
 type AddIndex struct {
-	Table string
-	Index Index
+	Table        string
+	Index        Index
+	IgnoreErrors bool // when true, runner logs a warning and continues on SQL failure
 }
+
+// ShouldIgnoreErrors implements ErrorIgnorer.
+func (op *AddIndex) ShouldIgnoreErrors() bool { return op.IgnoreErrors }
 
 // TypeName returns the operation type identifier.
 func (op *AddIndex) TypeName() string { return "add_index" }

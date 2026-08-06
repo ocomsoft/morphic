@@ -350,9 +350,17 @@ func (r *Runner) applyMigration(mig *Migration, state *SchemaState, opts RunOpti
 				}
 			}
 		}
-		// Skip state mutation when the drop operation was skipped — the object
-		// was never in the schema state either, so Mutate would fail.
-		if !skipped {
+		// When a drop is skipped the object was never in state, so Mutate
+		// would fail. For additive operations (create table, add field/index)
+		// we still need to register in state so later operations can reference them.
+		mutateOnSkip := false
+		if skipped {
+			switch op.(type) {
+			case *CreateTable, *AddField, *AddIndex, *AddForeignKey:
+				mutateOnSkip = true
+			}
+		}
+		if !skipped || mutateOnSkip {
 			if err := op.Mutate(state); err != nil {
 				return fmt.Errorf("operation %d/%d [%s]: mutating state: %w", i+1, len(mig.Operations), op.Describe(), err)
 			}

@@ -121,7 +121,7 @@ func (g *StarlarkGenerator) generateOperation(
 ) (string, error) {
 	switch change.Type {
 	case yaml.ChangeTypeTableAdded:
-		return g.generateCreateTable(change, schemaOnly)
+		return g.generateCreateTable(change, schemaOnly, ignoreErrors)
 	case yaml.ChangeTypeTableRemoved:
 		return g.generateDropTable(change, schemaOnly, ignoreErrors)
 	case yaml.ChangeTypeTableRenamed:
@@ -151,7 +151,7 @@ func (g *StarlarkGenerator) generateOperation(
 	}
 }
 
-func (g *StarlarkGenerator) generateCreateTable(change yaml.Change, schemaOnly bool) (string, error) {
+func (g *StarlarkGenerator) generateCreateTable(change yaml.Change, schemaOnly, ignoreErrors bool) (string, error) {
 	table, ok := change.NewValue.(yaml.Table)
 	if !ok {
 		return "", fmt.Errorf("expected yaml.Table for NewValue, got %T", change.NewValue)
@@ -185,6 +185,9 @@ func (g *StarlarkGenerator) generateCreateTable(change yaml.Change, schemaOnly b
 
 	if schemaOnly {
 		b.WriteString("            schema_only = True,\n")
+	}
+	if ignoreErrors {
+		b.WriteString("            ignore_errors = True,\n")
 	}
 
 	b.WriteString("        ),\n")

@@ -507,19 +507,21 @@ func (b *StarlarkBuiltins) builtinSetTypeMappings(_ *starlark.Thread, _ *starlar
 // builtinCreateTable implements create_table(name, fields=[], indexes=[]) → opValue.
 func (b *StarlarkBuiltins) builtinCreateTable(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		name    string
-		fields  *starlark.List
-		indexes *starlark.List
+		name         string
+		fields       *starlark.List
+		indexes      *starlark.List
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("create_table", args, kwargs,
 		"name", &name,
 		"fields?", &fields,
 		"indexes?", &indexes,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
 
-	op := &migrate.CreateTable{Name: name}
+	op := &migrate.CreateTable{Name: name, IgnoreErrors: ignoreErrors}
 
 	if fields != nil {
 		for i := 0; i < fields.Len(); i++ {
@@ -572,12 +574,14 @@ func (b *StarlarkBuiltins) builtinDropTable(_ *starlark.Thread, _ *starlark.Buil
 // builtinAddField implements add_field(table, field_dict) → opValue.
 func (b *StarlarkBuiltins) builtinAddField(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		table     string
-		fieldDict *starlark.Dict
+		table        string
+		fieldDict    *starlark.Dict
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("add_field", args, kwargs,
 		"table", &table,
 		"field", &fieldDict,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
@@ -585,7 +589,7 @@ func (b *StarlarkBuiltins) builtinAddField(_ *starlark.Thread, _ *starlark.Built
 	if err != nil {
 		return nil, fmt.Errorf("add_field: %w", err)
 	}
-	return &opValue{op: &migrate.AddField{Table: table, Field: f}}, nil
+	return &opValue{op: &migrate.AddField{Table: table, Field: f, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinDropField implements drop_field(table, field_name, schema_only=False, ignore_errors=False) → opValue.
@@ -668,12 +672,14 @@ func (b *StarlarkBuiltins) builtinRenameTable(_ *starlark.Thread, _ *starlark.Bu
 // builtinAddIndex implements add_index(table, index_dict) → opValue.
 func (b *StarlarkBuiltins) builtinAddIndex(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var (
-		table   string
-		idxDict *starlark.Dict
+		table        string
+		idxDict      *starlark.Dict
+		ignoreErrors bool
 	)
 	if err := starlark.UnpackArgs("add_index", args, kwargs,
 		"table", &table,
 		"index", &idxDict,
+		"ignore_errors?", &ignoreErrors,
 	); err != nil {
 		return nil, err
 	}
@@ -681,7 +687,7 @@ func (b *StarlarkBuiltins) builtinAddIndex(_ *starlark.Thread, _ *starlark.Built
 	if err != nil {
 		return nil, fmt.Errorf("add_index: %w", err)
 	}
-	return &opValue{op: &migrate.AddIndex{Table: table, Index: idx}}, nil
+	return &opValue{op: &migrate.AddIndex{Table: table, Index: idx, IgnoreErrors: ignoreErrors}}, nil
 }
 
 // builtinDropIndex implements drop_index(table, index_name, ignore_errors=False) → opValue.

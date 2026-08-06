@@ -580,6 +580,45 @@ else
 fi
 ```
 
+### Gating on Destructive Changes
+
+Use `--dry-run` in CI to block PRs that introduce destructive migrations:
+
+```yaml
+# .github/workflows/check-destructive.yml
+name: Check Destructive Migrations
+on: [pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Install morphic
+        run: go install github.com/ocomsoft/morphic@latest
+      - name: Check for destructive changes
+        run: morphic generate --dry-run --auto-approve
+      - name: Get migration details (on failure)
+        if: failure()
+        run: morphic generate --dry-run --json --auto-approve
+```
+
+### AI Agent Integration
+
+Use `--dry-run --json` for AI agents that need to understand migration impact:
+
+```bash
+# Agent reads the JSON and decides whether to proceed
+REPORT=$(morphic generate --dry-run --json --auto-approve 2>/dev/null)
+if [ $? -eq 1 ]; then
+    echo "Destructive migration detected — requesting human review"
+    echo "$REPORT" | jq '.changes[] | select(.destructive)'
+fi
+```
+
 ## The Migrations Directory Structure
 
 After initialisation and several generated migrations, the `migrations/` directory looks like:

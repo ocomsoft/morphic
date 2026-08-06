@@ -93,21 +93,22 @@ tables:
 	}
 }
 
-func TestLoadSchema_BothExist(t *testing.T) {
+func TestLoadSchema_BothExist_StarlarkWins(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "schema.star"), []byte(`database("x","1")`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "schema.star"), []byte(`database("star_db","1")`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "schema.yaml"), []byte("database:\n  name: x\n  version: '1'\ntables:\n  - name: t\n    fields:\n      - name: id\n        type: integer\n        primary_key: true\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "schema.yaml"), []byte("database:\n  name: yaml_db\n  version: '1'\ntables:\n  - name: t\n    fields:\n      - name: id\n        type: integer\n        primary_key: true\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := LoadSchema(dir, false)
-	if err == nil {
-		t.Fatal("expected error when both files exist")
+	schema, err := LoadSchema(dir, false)
+	if err != nil {
+		t.Fatalf("LoadSchema error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "found both") {
-		t.Errorf("unexpected error: %v", err)
+	// Starlark takes precedence when both exist.
+	if schema.Database.Name != "star_db" {
+		t.Errorf("expected Starlark schema (star_db), got %q", schema.Database.Name)
 	}
 }
 

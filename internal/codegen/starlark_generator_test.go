@@ -320,6 +320,15 @@ func TestStarlarkGenerator_ReviewComment(t *testing.T) {
 		t.Fatalf("GenerateMigration: %v", err)
 	}
 	assertContains(t, src, `# REVIEW`)
+	// The operation itself should be commented out
+	assertContains(t, src, `# drop_table(`)
+	// There should be no uncommented drop_table call
+	for _, line := range strings.Split(src, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "drop_table(") {
+			t.Errorf("expected drop_table to be commented out, found uncommented: %s", line)
+		}
+	}
 }
 
 func TestStarlarkGenerator_GenerateBlank(t *testing.T) {

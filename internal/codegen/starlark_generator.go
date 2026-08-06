@@ -97,9 +97,15 @@ func (g *StarlarkGenerator) GenerateMigration(
 			fmt.Fprintf(&b, "        # DESTRUCTIVE: %s\n", change.Description)
 		}
 		if review {
-			b.WriteString("        # REVIEW: destructive operation — verify before running\n")
+			b.WriteString("        # REVIEW: destructive operation — uncomment after verifying\n")
+			for _, line := range strings.Split(strings.TrimRight(op, "\n"), "\n") {
+				b.WriteString("        # ")
+				b.WriteString(strings.TrimPrefix(line, "        "))
+				b.WriteByte('\n')
+			}
+		} else {
+			b.WriteString(op)
 		}
-		b.WriteString(op)
 	}
 
 	b.WriteString("    ],\n")

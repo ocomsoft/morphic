@@ -60,8 +60,10 @@ func InitializeSchemaComponents(dbType yamlpkg.DatabaseType, verbose bool) *Sche
 	}
 }
 
-// ScanAndParseSchemas scans for Starlark schema files and loads them
-func ScanAndParseSchemas(components *SchemaComponents, verbose bool) ([]*yamlpkg.Schema, error) {
+// ScanAndParseSchemas scans for Starlark schema files and loads them.
+// If cfg is non-nil and contains Includes entries, those modules are also
+// resolved and their schemas loaded.
+func ScanAndParseSchemas(components *SchemaComponents, verbose bool, cfg ...*config.Config) ([]*yamlpkg.Schema, error) {
 	// Scan for Starlark schema files
 	schemaFiles, err := components.Scanner.ScanStarlarkModules()
 	if err != nil {
@@ -76,6 +78,49 @@ func ScanAndParseSchemas(components *SchemaComponents, verbose bool) ([]*yamlpkg
 				marker = " (with marker)"
 			}
 			color.Cyan("  - %s%s\n", file.ModulePath, marker)
+		}
+	}
+
+	// Resolve includes from config
+	var includeCfg *config.Config
+	if len(cfg) > 0 {
+		includeCfg = cfg[0]
+	}
+	if includeCfg != nil && len(includeCfg.Includes) > 0 {
+		seen := make(map[string]bool)
+		for _, file := range schemaFiles {
+			seen[file.FilePath] = true
+		}
+
+		for _, inc := range includeCfg.Includes {
+			modRoot, err := components.Scanner.ResolveModulePath(inc.Module)
+			if err != nil {
+				if verbose {
+					color.Yellow("  Include %s: %v\n", inc.Module, err)
+				}
+				continue
+			}
+			schemaDir := filepath.Join(modRoot, filepath.Dir(inc.Path))
+			schemaFile := filepath.Join(modRoot, inc.Path)
+			if seen[schemaFile] {
+				continue
+			}
+			seen[schemaFile] = true
+			if _, statErr := os.Stat(schemaFile); statErr != nil {
+				if verbose {
+					color.Yellow("  Include %s/%s: file not found\n", inc.Module, inc.Path)
+				}
+				continue
+			}
+			schemaFiles = append(schemaFiles, scanner.SchemaFile{
+				ModulePath: fmt.Sprintf("%s/%s", inc.Module, filepath.Dir(inc.Path)),
+				FilePath:   schemaFile,
+				Type:       scanner.SchemaTypeStarlark,
+			})
+			_ = schemaDir // used below via schemaFiles
+			if verbose {
+				color.Cyan("  - %s/%s (from config include)\n", inc.Module, inc.Path)
+			}
 		}
 	}
 

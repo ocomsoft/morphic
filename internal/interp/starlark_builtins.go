@@ -93,10 +93,11 @@ func (b *StarlarkBuiltins) Collected() *migrate.Migration {
 func (b *StarlarkBuiltins) Env() starlark.StringDict {
 	env := starlark.StringDict{
 		// Generic leaf builtins — return dicts.
-		"field": starlark.NewBuiltin("field", b.builtinField),
-		"fk":    starlark.NewBuiltin("fk", b.builtinFK),
-		"index": starlark.NewBuiltin("index", b.builtinIndex),
-		"row":   starlark.NewBuiltin("row", b.builtinRow),
+		"field":        starlark.NewBuiltin("field", b.builtinField),
+		"fk":           starlark.NewBuiltin("fk", b.builtinFK),
+		"index":        starlark.NewBuiltin("index", b.builtinIndex),
+		"unique_index": starlark.NewBuiltin("unique_index", b.builtinUniqueIndex),
+		"row":          starlark.NewBuiltin("row", b.builtinRow),
 
 		// Typed field builtins — return dicts with type pre-set.
 		"uuid":        starlark.NewBuiltin("uuid", b.typedSimpleBuiltin("uuid")),
@@ -229,6 +230,32 @@ func (b *StarlarkBuiltins) builtinIndex(_ *starlark.Thread, _ *starlark.Builtin,
 	mustSet(d, "name", starlark.String(name))
 	mustSet(d, "fields", fields)
 	mustSet(d, "unique", starlark.Bool(unique))
+	mustSet(d, "method", starlark.String(method))
+	mustSet(d, "where", starlark.String(where))
+	return d, nil
+}
+
+// builtinUniqueIndex is a convenience shorthand for index(..., unique=True).
+func (b *StarlarkBuiltins) builtinUniqueIndex(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var (
+		name   string
+		fields *starlark.List
+		method string
+		where  string
+	)
+	if err := starlark.UnpackArgs("unique_index", args, kwargs,
+		"name", &name,
+		"fields", &fields,
+		"method?", &method,
+		"where?", &where,
+	); err != nil {
+		return nil, err
+	}
+
+	d := starlark.NewDict(5)
+	mustSet(d, "name", starlark.String(name))
+	mustSet(d, "fields", fields)
+	mustSet(d, "unique", starlark.Bool(true))
 	mustSet(d, "method", starlark.String(method))
 	mustSet(d, "where", starlark.String(where))
 	return d, nil

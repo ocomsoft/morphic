@@ -289,6 +289,33 @@ func (s *Scanner) readSchemaFileWithType(r io.Reader, schemaType SchemaType) (st
 	return strings.Join(lines, "\n"), hasMarker, nil
 }
 
+// ResolveModulePath looks up a module by name (without version) by parsing
+// go.mod to find the version, then resolving to a filesystem path via the
+// module cache or workspace overrides.
+func (s *Scanner) ResolveModulePath(moduleName string) (string, error) {
+	goModBytes, err := os.ReadFile("go.mod")
+	if err != nil {
+		return "", fmt.Errorf("failed to read go.mod: %w", err)
+	}
+
+	modFile, err := modfile.Parse("go.mod", goModBytes, nil)
+	if err != nil {
+		return "", fmt.Errorf("invalid go.mod: %w", err)
+	}
+
+	for _, req := range modFile.Require {
+		if req.Mod.Path == moduleName {
+			resolved := s.getModulePath(req.Mod.Path, req.Mod.Version)
+			if resolved == "" {
+				return "", fmt.Errorf("module %s@%s not found in cache or workspace", req.Mod.Path, req.Mod.Version)
+			}
+			return resolved, nil
+		}
+	}
+
+	return "", fmt.Errorf("module %s not found in go.mod", moduleName)
+}
+
 func (s *Scanner) getModulePath(modPath, version string) string {
 	// Check workspace overrides first (go.work use directives)
 	if wsPath := s.resolveWorkspaceModule(modPath); wsPath != "" {

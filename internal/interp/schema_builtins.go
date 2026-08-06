@@ -66,7 +66,7 @@ func (s *SchemaDSLBuiltins) Env() starlark.StringDict {
 
 	// Keys we want to keep from the migration builtins (leaf helpers only).
 	leafKeys := []string{
-		"field", "fk", "index",
+		"field", "fk", "index", "unique_index",
 		"uuid", "varchar", "text", "integer", "bigint", "boolean",
 		"timestamp", "date", "float", "jsonb", "bytes", "decimal",
 		"serial", "time", "foreign_key",

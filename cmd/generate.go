@@ -166,7 +166,7 @@ func runGoMakeMigrations(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("invalid database type: %w", err)
 	}
 	components := workflow.InitializeSchemaComponents(dbType, goMigVerbose)
-	allSchemas, err := workflow.ScanAndParseSchemas(components, goMigVerbose)
+	allSchemas, err := workflow.ScanAndParseSchemas(components, goMigVerbose, cfg)
 	if err != nil {
 		return fmt.Errorf("parsing schema: %w", err)
 	}

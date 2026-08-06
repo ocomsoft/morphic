@@ -531,6 +531,93 @@ func TestScanner_findGoWork(t *testing.T) {
 	}
 }
 
+// TestScanner_ResolveModulePath_Found verifies that ResolveModulePath reads
+// go.mod to find the required module's version, then resolves it to a
+// filesystem path. This test uses a go.work workspace override (as in
+// TestScanner_resolveWorkspaceModule) so resolution does not depend on the
+// real GOPATH module cache being populated.
+func TestScanner_ResolveModulePath_Found(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_resolve_found_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	// Create workspace root with go.work
+	workContent := "go 1.21\n\nuse (\n\t./app\n\t./mylib\n)\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.work"), []byte(workContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create app module (the one we'll run the scanner from)
+	appDir := filepath.Join(tmpDir, "app")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	appGoMod := "module test/app\n\ngo 1.21\n\nrequire example.com/mylib v1.2.3\n"
+	if err := os.WriteFile(filepath.Join(appDir, "go.mod"), []byte(appGoMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create mylib module with go.mod
+	libDir := filepath.Join(tmpDir, "mylib")
+	if err := os.MkdirAll(libDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	libGoMod := "module example.com/mylib\n\ngo 1.21\n"
+	if err := os.WriteFile(filepath.Join(libDir, "go.mod"), []byte(libGoMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run from inside the app directory
+	if err := os.Chdir(appDir); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	resolved, err := s.ResolveModulePath("example.com/mylib")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if resolved != libDir {
+		t.Errorf("Expected %s, got %s", libDir, resolved)
+	}
+}
+
+// TestScanner_ResolveModulePath_NotFound verifies that ResolveModulePath
+// returns an error when the requested module is not present in go.mod's
+// require directives.
+func TestScanner_ResolveModulePath_NotFound(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_resolve_notfound_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/module\n\ngo 1.21\n\nrequire example.com/other v1.0.0\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	_, err = s.ResolveModulePath("example.com/missing")
+	if err == nil {
+		t.Fatal("Expected error for module not found in go.mod")
+	}
+	if !strings.Contains(err.Error(), "not found in go.mod") {
+		t.Errorf("Expected 'not found in go.mod' error, got: %v", err)
+	}
+}
+
 func TestScanner_readSchemaFile(t *testing.T) {
 	tests := []struct {
 		name           string

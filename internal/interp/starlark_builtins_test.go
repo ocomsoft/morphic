@@ -353,6 +353,133 @@ migration(
 	}
 }
 
+// TestStarlarkBuiltin_UniqueIndex_Direct verifies unique_index() is a
+// convenience shorthand for index(..., unique=True): the returned dict must
+// have unique automatically set to True without the caller passing it.
+func TestStarlarkBuiltin_UniqueIndex_Direct(t *testing.T) {
+	builtins := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+
+	fields := starlark.NewList([]starlark.Value{starlark.String("email")})
+	result, err := starlark.Call(
+		thread,
+		builtins.Env()["unique_index"],
+		starlark.Tuple{starlark.String("idx_users_email"), fields},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("unique_index() error: %v", err)
+	}
+
+	dict, ok := result.(*starlark.Dict)
+	if !ok {
+		t.Fatalf("expected *starlark.Dict, got %T", result)
+	}
+
+	name, _, _ := dict.Get(starlark.String("name"))
+	if name != starlark.String("idx_users_email") {
+		t.Errorf("expected name 'idx_users_email', got %v", name)
+	}
+
+	unique, _, _ := dict.Get(starlark.String("unique"))
+	if unique != starlark.Bool(true) {
+		t.Errorf("expected unique True, got %v", unique)
+	}
+
+	method, _, _ := dict.Get(starlark.String("method"))
+	if method != starlark.String("") {
+		t.Errorf("expected method '', got %v", method)
+	}
+
+	where, _, _ := dict.Get(starlark.String("where"))
+	if where != starlark.String("") {
+		t.Errorf("expected where '', got %v", where)
+	}
+}
+
+// TestStarlarkBuiltin_UniqueIndex_WithMethodAndWhere verifies the optional
+// method and where keyword arguments still flow through correctly.
+func TestStarlarkBuiltin_UniqueIndex_WithMethodAndWhere(t *testing.T) {
+	builtins := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+
+	fields := starlark.NewList([]starlark.Value{starlark.String("email")})
+	result, err := starlark.Call(
+		thread,
+		builtins.Env()["unique_index"],
+		starlark.Tuple{starlark.String("idx_users_email"), fields},
+		[]starlark.Tuple{
+			{starlark.String("method"), starlark.String("btree")},
+			{starlark.String("where"), starlark.String("deleted_at IS NULL")},
+		},
+	)
+	if err != nil {
+		t.Fatalf("unique_index() error: %v", err)
+	}
+
+	dict, ok := result.(*starlark.Dict)
+	if !ok {
+		t.Fatalf("expected *starlark.Dict, got %T", result)
+	}
+
+	unique, _, _ := dict.Get(starlark.String("unique"))
+	if unique != starlark.Bool(true) {
+		t.Errorf("expected unique True, got %v", unique)
+	}
+
+	method, _, _ := dict.Get(starlark.String("method"))
+	if method != starlark.String("btree") {
+		t.Errorf("expected method 'btree', got %v", method)
+	}
+
+	where, _, _ := dict.Get(starlark.String("where"))
+	if where != starlark.String("deleted_at IS NULL") {
+		t.Errorf("expected where 'deleted_at IS NULL', got %v", where)
+	}
+}
+
+// TestStarlarkBuiltin_UniqueIndex_ViaMigration exercises unique_index()
+// end-to-end through create_table(), mirroring how index() is used in
+// TestStarlarkBuiltin_Migration_CreateTable.
+func TestStarlarkBuiltin_UniqueIndex_ViaMigration(t *testing.T) {
+	b := execStar(t, `
+migration(
+    name = "0001_initial",
+    dependencies = [],
+    operations = [
+        create_table(
+            name = "users",
+            fields = [
+                field("id", "uuid", primary_key=True, default="new_uuid"),
+                field("email", "varchar", length=255),
+            ],
+            indexes = [
+                unique_index("users_email_idx", ["email"]),
+            ],
+        ),
+    ],
+)
+`)
+
+	m := b.Collected()
+	if m == nil {
+		t.Fatal("no migration collected")
+	}
+	ct, ok := m.Operations[0].(*migrate.CreateTable)
+	if !ok {
+		t.Fatalf("expected *migrate.CreateTable, got %T", m.Operations[0])
+	}
+	if len(ct.Indexes) != 1 {
+		t.Fatalf("expected 1 index, got %d", len(ct.Indexes))
+	}
+	if ct.Indexes[0].Name != "users_email_idx" {
+		t.Errorf("expected index name 'users_email_idx', got %q", ct.Indexes[0].Name)
+	}
+	if !ct.Indexes[0].Unique {
+		t.Error("expected index to be unique automatically")
+	}
+}
+
 func TestStarlarkBuiltin_AddIndex(t *testing.T) {
 	b := execStar(t, `
 migration(

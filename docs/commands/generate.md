@@ -18,8 +18,10 @@ morphic generate [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--auto-approve` | bool | `false` | Automatically approve all destructive operations without prompting (for CI/non-TTY environments) |
 | `--check` | bool | `false` | Exit with error code 1 if migrations are needed (CI/CD mode) |
-| `--dry-run` | bool | `false` | Print generated migration source without writing a file |
+| `--dry-run` | bool | `false` | Print change summary and annotated migration source without writing a file; exits with code 1 if destructive operations are detected |
+| `--json` | bool | `false` | Output dry-run results as structured JSON (requires `--dry-run`) |
 | `--merge` | bool | `false` | Generate a merge migration for detected concurrent branches |
 | `--name` | string | auto-generated | Custom name suffix for the migration file |
 | `--verbose` | bool | `false` | Show detailed pipeline output |

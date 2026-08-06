@@ -33,11 +33,9 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/modfile"
-	yaml "gopkg.in/yaml.v3"
 
 	"github.com/ocomsoft/morphic/internal/interp"
 	"github.com/ocomsoft/morphic/internal/workflow"
-	yamlpkg "github.com/ocomsoft/morphic/internal/yaml"
 )
 
 var (
@@ -87,16 +85,6 @@ func runFindIncludes(cmd *cobra.Command, args []string) error {
 		},
 		SelectSchemasInteractively: func(schemas []workflow.DiscoveredSchema) ([]workflow.DiscoveredSchema, error) {
 			return selectSchemasInteractively(schemas)
-		},
-		LoadExistingSchema: func(path string) (*yamlpkg.Schema, error) {
-			schemaDir := filepath.Dir(path)
-			return interp.LoadSchema(schemaDir, false)
-		},
-		FilterNewSchemas: func(discovered []workflow.DiscoveredSchema, existing *yamlpkg.Schema) []workflow.DiscoveredSchema {
-			return filterNewSchemas(discovered, existing)
-		},
-		UpdateSchemaWithIncludes: func(path string, schema *yamlpkg.Schema, schemasToAdd []workflow.DiscoveredSchema) error {
-			return updateSchemaWithIncludes(path, schema, schemasToAdd)
 		},
 	}
 	return workflow.ExecuteFindIncludes(cmd, cfgFile, schemaPath, interactive, includeWorkspace, callbacks)
@@ -283,6 +271,19 @@ func discoverGoModSchemas() ([]workflow.DiscoveredSchema, error) {
 	return discovered, nil
 }
 
+// isSchemaFile returns true if the filename is schema.star or schema.yaml
+func isSchemaFile(name string) bool {
+	return name == "schema.star" || name == "schema.yaml"
+}
+
+// schemaTypeLabel returns a human-readable label for the schema type
+func schemaTypeLabel(name string) string {
+	if name == "schema.star" {
+		return "starlark"
+	}
+	return "yaml"
+}
+
 // findSchemasInPath finds schemas in a given path (workspace module)
 func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.DiscoveredSchema, error) {
 	var schemas []workflow.DiscoveredSchema
@@ -305,6 +306,9 @@ func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.Discovered
 
 	modulePath := modFile.Module.Mod.Path
 
+	// Track directories where we already found a schema (schema.star takes precedence)
+	seenDirs := make(map[string]bool)
+
 	// Walk the directory to find schema files
 	err = filepath.WalkDir(basePath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -316,39 +320,44 @@ func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.Discovered
 			return filepath.SkipDir
 		}
 
-		// Look for schema.star files in any subdirectory
-		if d.Name() == "schema.star" {
-			relPath, err := filepath.Rel(basePath, path)
-			if err != nil {
-				return nil // Continue walking
-			}
+		if !isSchemaFile(d.Name()) {
+			return nil
+		}
 
-			// Load the schema using interp.LoadSchema on the parent directory
-			schemaDir := filepath.Dir(path)
-			schema, err := interp.LoadSchema(schemaDir, false)
-			if err != nil {
-				if verbose {
-					color.Yellow("    Warning: Failed to load %s: %v", path, err)
-				}
-				return nil // Continue walking
-			}
+		schemaDir := filepath.Dir(path)
+		if seenDirs[schemaDir] {
+			return nil
+		}
+		seenDirs[schemaDir] = true
 
-			discovered := workflow.DiscoveredSchema{
-				ModulePath:   modulePath,
-				RelativePath: relPath,
-				FullPath:     path,
-				IsWorkspace:  isWorkspace,
-				Schema:       schema,
-				TableCount:   len(schema.Tables),
-				DatabaseName: schema.Database.Name,
-				DatabaseType: "starlark",
-			}
+		relPath, err := filepath.Rel(basePath, path)
+		if err != nil {
+			return nil // Continue walking
+		}
 
-			schemas = append(schemas, discovered)
-
+		schema, err := interp.LoadSchema(schemaDir, false)
+		if err != nil {
 			if verbose {
-				color.Green("    Found schema: %s (%d tables)", relPath, len(schema.Tables))
+				color.Yellow("    Warning: Failed to load %s: %v", path, err)
 			}
+			return nil // Continue walking
+		}
+
+		discovered := workflow.DiscoveredSchema{
+			ModulePath:   modulePath,
+			RelativePath: relPath,
+			FullPath:     path,
+			IsWorkspace:  isWorkspace,
+			Schema:       schema,
+			TableCount:   len(schema.Tables),
+			DatabaseName: schema.Database.Name,
+			DatabaseType: schemaTypeLabel(d.Name()),
+		}
+
+		schemas = append(schemas, discovered)
+
+		if verbose {
+			color.Green("    Found schema: %s (%d tables)", relPath, len(schema.Tables))
 		}
 
 		return nil
@@ -361,6 +370,9 @@ func findSchemasInPath(basePath string, isWorkspace bool) ([]workflow.Discovered
 func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchema, error) {
 	var schemas []workflow.DiscoveredSchema
 
+	// Track directories where we already found a schema
+	seenDirs := make(map[string]bool)
+
 	// Walk the module directory to find schema files
 	err := filepath.WalkDir(modPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -372,38 +384,44 @@ func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchem
 			return filepath.SkipDir
 		}
 
-		// Look for schema.star files in any subdirectory
-		if d.Name() == "schema.star" {
-			relPath, err := filepath.Rel(modPath, path)
-			if err != nil {
-				return nil // Continue walking
-			}
+		if !isSchemaFile(d.Name()) {
+			return nil
+		}
 
-			schemaDir := filepath.Dir(path)
-			schema, err := interp.LoadSchema(schemaDir, false)
-			if err != nil {
-				if verbose {
-					color.Yellow("    Warning: Failed to load %s: %v", path, err)
-				}
-				return nil // Continue walking
-			}
+		schemaDir := filepath.Dir(path)
+		if seenDirs[schemaDir] {
+			return nil
+		}
+		seenDirs[schemaDir] = true
 
-			discovered := workflow.DiscoveredSchema{
-				ModulePath:   modulePath,
-				RelativePath: relPath,
-				FullPath:     path,
-				IsWorkspace:  false,
-				Schema:       schema,
-				TableCount:   len(schema.Tables),
-				DatabaseName: schema.Database.Name,
-				DatabaseType: "starlark",
-			}
+		relPath, err := filepath.Rel(modPath, path)
+		if err != nil {
+			return nil // Continue walking
+		}
 
-			schemas = append(schemas, discovered)
-
+		schema, err := interp.LoadSchema(schemaDir, false)
+		if err != nil {
 			if verbose {
-				color.Green("    Found schema: %s (%d tables)", relPath, len(schema.Tables))
+				color.Yellow("    Warning: Failed to load %s: %v", path, err)
 			}
+			return nil // Continue walking
+		}
+
+		discovered := workflow.DiscoveredSchema{
+			ModulePath:   modulePath,
+			RelativePath: relPath,
+			FullPath:     path,
+			IsWorkspace:  false,
+			Schema:       schema,
+			TableCount:   len(schema.Tables),
+			DatabaseName: schema.Database.Name,
+			DatabaseType: schemaTypeLabel(d.Name()),
+		}
+
+		schemas = append(schemas, discovered)
+
+		if verbose {
+			color.Green("    Found schema: %s (%d tables)", relPath, len(schema.Tables))
 		}
 
 		return nil
@@ -412,13 +430,16 @@ func findSchemasInModule(modPath, modulePath string) ([]workflow.DiscoveredSchem
 	return schemas, err
 }
 
-// findLocalSchemaFiles recursively searches for schema.star files in the current directory
+// findLocalSchemaFiles recursively searches for schema.star and schema.yaml files in the current directory
 func findLocalSchemaFiles() ([]workflow.LocalSchemaFile, error) {
 	var schemas []workflow.LocalSchemaFile
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
+
+	// Track directories where we already found a schema
+	seenDirs := make(map[string]bool)
 
 	err = filepath.WalkDir(currentDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -430,33 +451,39 @@ func findLocalSchemaFiles() ([]workflow.LocalSchemaFile, error) {
 			return filepath.SkipDir
 		}
 
-		// Look for schema.star files
-		if d.Name() == "schema.star" {
-			schemaDir := filepath.Dir(path)
-			schema, err := interp.LoadSchema(schemaDir, false)
-			if err != nil {
-				if verbose {
-					color.Yellow("Warning: Failed to load %s: %v", path, err)
-				}
-				return nil // Continue walking
-			}
+		if !isSchemaFile(d.Name()) {
+			return nil
+		}
 
-			relPath, err := filepath.Rel(currentDir, path)
-			if err != nil {
-				relPath = path // Use absolute path if relative fails
-			}
+		schemaDir := filepath.Dir(path)
+		if seenDirs[schemaDir] {
+			return nil
+		}
+		seenDirs[schemaDir] = true
 
-			localSchema := workflow.LocalSchemaFile{
-				Path:         relPath,
-				DatabaseName: schema.Database.Name,
-				TableCount:   len(schema.Tables),
-			}
-
-			schemas = append(schemas, localSchema)
-
+		schema, err := interp.LoadSchema(schemaDir, false)
+		if err != nil {
 			if verbose {
-				color.Green("Found local schema: %s (database: %s, %d tables)", relPath, schema.Database.Name, len(schema.Tables))
+				color.Yellow("Warning: Failed to load %s: %v", path, err)
 			}
+			return nil // Continue walking
+		}
+
+		relPath, err := filepath.Rel(currentDir, path)
+		if err != nil {
+			relPath = path
+		}
+
+		localSchema := workflow.LocalSchemaFile{
+			Path:         relPath,
+			DatabaseName: schema.Database.Name,
+			TableCount:   len(schema.Tables),
+		}
+
+		schemas = append(schemas, localSchema)
+
+		if verbose {
+			color.Green("Found local schema: %s (database: %s, %d tables)", relPath, schema.Database.Name, len(schema.Tables))
 		}
 
 		return nil
@@ -494,30 +521,6 @@ func getModuleCachePath(modPath, version string) string {
 	}
 
 	return ""
-}
-
-// filterNewSchemas filters out schemas that are already included
-func filterNewSchemas(discovered []workflow.DiscoveredSchema, existingSchema *yamlpkg.Schema) []workflow.DiscoveredSchema {
-	var newSchemas []workflow.DiscoveredSchema
-
-	// Create a map of existing includes for quick lookup
-	existingIncludes := make(map[string]bool)
-	for _, include := range existingSchema.Include {
-		key := include.Module + "|" + include.Path
-		existingIncludes[key] = true
-	}
-
-	// Filter out already included schemas
-	for _, schema := range discovered {
-		key := schema.ModulePath + "|" + schema.RelativePath
-		if !existingIncludes[key] {
-			newSchemas = append(newSchemas, schema)
-		} else if verbose {
-			color.Yellow("  Skipping already included: %s -> %s", schema.ModulePath, schema.RelativePath)
-		}
-	}
-
-	return newSchemas
 }
 
 // selectLocalSchemaFile prompts user to select a schema file when multiple are found
@@ -595,32 +598,6 @@ func selectSchemasInteractively(schemas []workflow.DiscoveredSchema) ([]workflow
 	}
 
 	return selected, nil
-}
-
-// updateSchemaWithIncludes adds the selected includes to the schema file
-func updateSchemaWithIncludes(filePath string, schema *yamlpkg.Schema, schemasToAdd []workflow.DiscoveredSchema) error {
-	// Add new includes
-	for _, discoveredSchema := range schemasToAdd {
-		include := yamlpkg.Include{
-			Module: discoveredSchema.ModulePath,
-			Path:   discoveredSchema.RelativePath,
-		}
-		schema.Include = append(schema.Include, include)
-	}
-
-	// Marshal back to YAML
-	content, err := yaml.Marshal(schema)
-	if err != nil {
-		return fmt.Errorf("failed to marshal schema: %w", err)
-	}
-
-	// Write back to file
-	err = os.WriteFile(filePath, content, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write schema file: %w", err)
-	}
-
-	return nil
 }
 
 func init() {

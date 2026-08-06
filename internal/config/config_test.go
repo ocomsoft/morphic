@@ -415,6 +415,120 @@ func TestMigrationFormatDefault(t *testing.T) {
 	}
 }
 
+func TestHasInclude(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.HasInclude("example.com/mod", "schema/schema.star") {
+		t.Error("expected HasInclude to return false for empty includes")
+	}
+
+	cfg.Includes = []IncludeEntry{
+		{Module: "example.com/mod", Path: "schema/schema.star"},
+	}
+
+	if !cfg.HasInclude("example.com/mod", "schema/schema.star") {
+		t.Error("expected HasInclude to return true for existing include")
+	}
+
+	if cfg.HasInclude("example.com/other", "schema/schema.star") {
+		t.Error("expected HasInclude to return false for different module")
+	}
+
+	if cfg.HasInclude("example.com/mod", "other/schema.yaml") {
+		t.Error("expected HasInclude to return false for different path")
+	}
+}
+
+func TestAddInclude(t *testing.T) {
+	cfg := DefaultConfig()
+
+	added := cfg.AddInclude("example.com/mod", "schema/schema.star")
+	if !added {
+		t.Error("expected AddInclude to return true for new entry")
+	}
+	if len(cfg.Includes) != 1 {
+		t.Fatalf("expected 1 include, got %d", len(cfg.Includes))
+	}
+
+	added = cfg.AddInclude("example.com/mod", "schema/schema.star")
+	if added {
+		t.Error("expected AddInclude to return false for duplicate entry")
+	}
+	if len(cfg.Includes) != 1 {
+		t.Fatalf("expected still 1 include after duplicate, got %d", len(cfg.Includes))
+	}
+
+	added = cfg.AddInclude("example.com/other", "db/schema.yaml")
+	if !added {
+		t.Error("expected AddInclude to return true for different entry")
+	}
+	if len(cfg.Includes) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(cfg.Includes))
+	}
+}
+
+func TestIncludesSaveAndReload(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "morphic.config.yaml")
+
+	original := DefaultConfig()
+	original.AddInclude("example.com/auth", "schema/schema.star")
+	original.AddInclude("example.com/billing", "db/schema.yaml")
+
+	if err := original.Save(cfgPath); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	loaded, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if len(loaded.Includes) != 2 {
+		t.Fatalf("expected 2 includes after reload, got %d", len(loaded.Includes))
+	}
+
+	if !loaded.HasInclude("example.com/auth", "schema/schema.star") {
+		t.Error("expected auth include to survive round-trip")
+	}
+	if !loaded.HasInclude("example.com/billing", "db/schema.yaml") {
+		t.Error("expected billing include to survive round-trip")
+	}
+}
+
+func TestLoadConfigWithIncludes(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	content := `database:
+  type: postgresql
+includes:
+  - module: example.com/users
+    path: schema/schema.star
+  - module: example.com/orders
+    path: db/schema.yaml
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if len(cfg.Includes) != 2 {
+		t.Fatalf("expected 2 includes, got %d", len(cfg.Includes))
+	}
+
+	if cfg.Includes[0].Module != "example.com/users" || cfg.Includes[0].Path != "schema/schema.star" {
+		t.Errorf("unexpected first include: %+v", cfg.Includes[0])
+	}
+	if cfg.Includes[1].Module != "example.com/orders" || cfg.Includes[1].Path != "db/schema.yaml" {
+		t.Errorf("unexpected second include: %+v", cfg.Includes[1])
+	}
+}
+
 func TestLoadWithEnvOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")

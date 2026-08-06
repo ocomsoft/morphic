@@ -332,12 +332,11 @@ type FindIncludesCallbacks struct {
 	SelectLocalSchemaFile      func([]LocalSchemaFile) (string, error)
 	DiscoverSchemas            func() ([]DiscoveredSchema, error)
 	SelectSchemasInteractively func([]DiscoveredSchema) ([]DiscoveredSchema, error)
-	LoadExistingSchema         func(string) (*yamlpkg.Schema, error)
-	FilterNewSchemas           func([]DiscoveredSchema, *yamlpkg.Schema) []DiscoveredSchema
-	UpdateSchemaWithIncludes   func(string, *yamlpkg.Schema, []DiscoveredSchema) error
 }
 
-// ExecuteFindIncludes handles the complete find includes process
+// ExecuteFindIncludes handles the complete find includes process.
+// It discovers schema files in Go modules and writes the includes
+// to morphic.config.yaml rather than modifying the schema files directly.
 func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, interactive, includeWorkspace bool, callbacks *FindIncludesCallbacks) error {
 	// Load configuration
 	cfg := config.LoadOrDefault(configFile)
@@ -356,7 +355,7 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 	// Check if schema flag was provided
 	schemaProvided := cmd.Flags().Changed("schema")
 
-	// If schema not provided, search for schema files
+	// If schema not provided, search for schema files to identify the project
 	if !schemaProvided {
 		if verbose {
 			color.Blue("No --schema flag provided, searching for schema files...")
@@ -372,13 +371,11 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 		}
 
 		if len(localSchemas) == 1 {
-			// Use the single schema file found
 			schemaPath = localSchemas[0].Path
 			if verbose {
 				color.Green("Found schema file: %s (database: %s)", schemaPath, localSchemas[0].DatabaseName)
 			}
 		} else {
-			// Multiple schema files found, prompt user
 			selectedPath, err := callbacks.SelectLocalSchemaFile(localSchemas)
 			if err != nil {
 				return fmt.Errorf("failed to select schema file: %w", err)
@@ -411,14 +408,16 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 		color.Green("Found %d schema(s)\n", len(discovered))
 	}
 
-	// Load existing schema
-	existingSchema, err := callbacks.LoadExistingSchema(schemaPath)
-	if err != nil {
-		return fmt.Errorf("failed to load existing schema: %w", err)
+	// Filter out schemas already in config
+	var newSchemas []DiscoveredSchema
+	for _, schema := range discovered {
+		if !cfg.HasInclude(schema.ModulePath, schema.RelativePath) {
+			newSchemas = append(newSchemas, schema)
+		} else if verbose {
+			color.Yellow("  Skipping already included: %s -> %s", schema.ModulePath, schema.RelativePath)
+		}
 	}
 
-	// Filter out already included schemas
-	newSchemas := callbacks.FilterNewSchemas(discovered, existingSchema)
 	if len(newSchemas) == 0 {
 		color.Yellow("All discovered schemas are already included.")
 		return nil
@@ -448,16 +447,26 @@ func ExecuteFindIncludes(cmd *cobra.Command, configFile, schemaPath string, inte
 	}
 
 	if verbose {
-		color.Blue("\n3. Updating schema file...")
+		color.Blue("\n3. Updating morphic.config.yaml...")
 	}
 
-	// Update schema file
-	err = callbacks.UpdateSchemaWithIncludes(schemaPath, existingSchema, schemasToAdd)
-	if err != nil {
-		return fmt.Errorf("failed to update schema: %w", err)
+	// Add includes to config
+	for _, schema := range schemasToAdd {
+		cfg.AddInclude(schema.ModulePath, schema.RelativePath)
 	}
 
-	color.Green("\nSuccessfully added %d include(s) to %s", len(schemasToAdd), schemaPath)
+	// Determine config file path
+	configPath := configFile
+	if configPath == "" {
+		configPath = config.GetConfigPath()
+	}
+
+	// Save updated config
+	if err := cfg.Save(configPath); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	color.Green("\nSuccessfully added %d include(s) to %s", len(schemasToAdd), configPath)
 
 	// Show what was added
 	color.Cyan("\nAdded includes:")

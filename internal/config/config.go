@@ -45,6 +45,15 @@ type Config struct {
 
 	// Output settings
 	Output OutputConfig `yaml:"output" mapstructure:"output"`
+
+	// Schema includes discovered by find-includes
+	Includes []IncludeEntry `yaml:"includes,omitempty" mapstructure:"includes"`
+}
+
+// IncludeEntry represents an external schema module to include
+type IncludeEntry struct {
+	Module string `yaml:"module" mapstructure:"module"`
+	Path   string `yaml:"path" mapstructure:"path"`
 }
 
 // DatabaseConfig contains database-related settings
@@ -186,6 +195,26 @@ func setDefaults(v *viper.Viper, cfg *Config) {
 	v.SetDefault("migration.format", cfg.Migration.Format)
 	v.SetDefault("output.verbose", cfg.Output.Verbose)
 	v.SetDefault("output.color_enabled", cfg.Output.ColorEnabled)
+}
+
+// HasInclude checks if a module+path combination is already in the includes list
+func (c *Config) HasInclude(module, path string) bool {
+	for _, inc := range c.Includes {
+		if inc.Module == module && inc.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+// AddInclude adds a new include entry if it doesn't already exist.
+// Returns true if the entry was added, false if it already existed.
+func (c *Config) AddInclude(module, path string) bool {
+	if c.HasInclude(module, path) {
+		return false
+	}
+	c.Includes = append(c.Includes, IncludeEntry{Module: module, Path: path})
+	return true
 }
 
 // GetConfigPath returns the default config file path

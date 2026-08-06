@@ -1,2 +1,2 @@
-- [ ] `morphic find-includes` asked to pick as schmea but we update the migration.yaml???
+- [x] `morphic find-includes` asked to pick as schmea but we update the migration.yaml???
 - [ ] running 

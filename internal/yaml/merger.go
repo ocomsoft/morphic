@@ -26,6 +26,8 @@ package yaml
 import (
 	"fmt"
 
+	"github.com/fatih/color"
+
 	"github.com/ocomsoft/morphic/internal/errors"
 )
 
@@ -127,9 +129,7 @@ func (m *Merger) mergeTables(tableName string, tables []Table) (*Table, error) {
 		return &tables[0], nil
 	}
 
-	if m.verbose {
-		fmt.Printf("Merging %d definitions for table: %s\n", len(tables), tableName)
-	}
+	color.Yellow("Warning: merging %d definitions for table: %s\n", len(tables), tableName)
 
 	merged := &Table{
 		Name:   tableName,
@@ -151,6 +151,17 @@ func (m *Merger) mergeTables(tableName string, tables []Table) (*Table, error) {
 			return nil, fmt.Errorf("failed to merge field %s: %w", fieldName, err)
 		}
 		merged.Fields = append(merged.Fields, *mergedField)
+	}
+
+	// Merge indexes — deduplicate by name, last definition wins.
+	indexMap := make(map[string]Index)
+	for _, table := range tables {
+		for _, idx := range table.Indexes {
+			indexMap[idx.Name] = idx
+		}
+	}
+	for _, idx := range indexMap {
+		merged.Indexes = append(merged.Indexes, idx)
 	}
 
 	return merged, nil

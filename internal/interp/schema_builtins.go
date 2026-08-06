@@ -251,10 +251,8 @@ func schemaDictToField(d *starlark.Dict) (types.Field, error) {
 		return f, fmt.Errorf("field dict missing required key 'type'")
 	}
 
-	if dictGetBool(d, "nullable") {
-		nullable := true
-		f.Nullable = &nullable
-	}
+	nullable := dictGetBool(d, "nullable")
+	f.Nullable = &nullable
 	f.PrimaryKey = dictGetBool(d, "primary_key")
 
 	if v, ok := dictGetString(d, "default"); ok {

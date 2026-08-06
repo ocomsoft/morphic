@@ -130,7 +130,7 @@ func init() {
 //  3. Parse and merge the current schema files
 //  4. Diff the reconstructed state against the current schema
 //  5. Generate a new .star migration file (or merge migration if --merge is set)
-func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
+func runGoMakeMigrations(cmd *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(cfgFile)
 	if goMigJSON && !goMigDryRun {
 		return fmt.Errorf("--json requires --dry-run")
@@ -276,7 +276,10 @@ func runGoMakeMigrations(_ *cobra.Command, _ []string) error {
 			printDryRunSummary(name, diff, src)
 		}
 		if diff.IsDestructive {
-			os.Exit(1)
+			// Return an error so cobra exits with code 1, but use
+			// SilenceErrors so the message isn't printed after our output.
+			cmd.SilenceErrors = true
+			return fmt.Errorf("destructive operations detected")
 		}
 		return nil
 	}

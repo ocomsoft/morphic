@@ -289,6 +289,19 @@ alter_field("parts",
 | `table` | 1st | string | Yes | Table name |
 | `old_field` | keyword | field dict | Yes | Current field definition |
 | `new_field` | keyword | field dict | Yes | New field definition |
+| `strategy` | keyword | string | No | How to handle the type change: `"cast"` (default) for direct ALTER COLUMN, `"drop_create"` to drop and re-add the column (loses data but always succeeds) |
+
+When the database cannot cast between types directly (e.g. `text` → `bytes`), use `strategy="drop_create"`:
+
+```starlark
+alter_field("sessions",
+    old_field = text("data"),
+    new_field = bytes("data"),
+    strategy = "drop_create",
+)
+```
+
+> **Warning:** `drop_create` drops the column and re-adds it, so all existing data in that column is lost.
 
 ### rename_field
 
@@ -582,6 +595,26 @@ migration(
     ],
 )
 ```
+
+### Changing to an Incompatible Type
+
+When the database cannot directly cast between types, use `strategy="drop_create"` to drop and re-add the column:
+
+```starlark
+migration(
+    name = "0006_sessions_data_to_bytes",
+    dependencies = ["0005_widen_part_number"],
+    operations = [
+        alter_field("sessions",
+            old_field = text("data"),
+            new_field = bytes("data"),
+            strategy = "drop_create",
+        ),
+    ],
+)
+```
+
+> **Warning:** `drop_create` discards all existing data in the column. Back up data first if needed.
 
 ### Seeding Reference Data
 

@@ -192,8 +192,11 @@ alter_field("users",
 )
 ```
 
-- **Destructive**: No (though incompatible type changes may fail at the database level)
+- **Destructive**: No with default `"cast"` strategy; Yes with `"drop_create"` (column data is lost)
 - **Down**: emits the reverse `ALTER COLUMN` restoring the old definition
+- **Strategy**: optional `strategy` parameter controls how type changes are applied:
+  - `"cast"` (default) — direct `ALTER COLUMN ... TYPE`
+  - `"drop_create"` — drops the column and re-adds it with the new type (use when the database cannot cast between types, e.g. `text` → `bytes`)
 
 ### rename_field
 

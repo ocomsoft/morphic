@@ -369,6 +369,24 @@ Both `old_field` and `new_field` must have the same name. The auto-generator fil
 | `table` | 1st | string | Yes | Table to modify |
 | `old_field` | keyword | field dict | Yes | Current column definition (before change) |
 | `new_field` | keyword | field dict | Yes | Desired column definition (after change) |
+| `strategy` | keyword | string | No | How to handle the type change (see below) |
+
+**Strategy options:**
+
+| Strategy | Behaviour | Data preserved? |
+|----------|-----------|-----------------|
+| `"cast"` (default) | Direct `ALTER COLUMN ... TYPE` | Yes (if the database can cast between types) |
+| `"drop_create"` | Drops the column, then adds it with the new definition | No — column data is lost |
+
+Use `strategy="drop_create"` when the database cannot cast between the old and new types (e.g. `text` → `bytes`):
+
+```starlark
+alter_field("sessions",
+    old_field = text("data"),
+    new_field = bytes("data"),
+    strategy = "drop_create",
+)
+```
 
 ---
 

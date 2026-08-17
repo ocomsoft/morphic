@@ -618,13 +618,18 @@ func (b *StarlarkBuiltins) builtinAlterField(_ *starlark.Thread, _ *starlark.Bui
 		table    string
 		oldField *starlark.Dict
 		newField *starlark.Dict
+		strategy string
 	)
 	if err := starlark.UnpackArgs("alter_field", args, kwargs,
 		"table", &table,
 		"old_field", &oldField,
 		"new_field", &newField,
+		"strategy?", &strategy,
 	); err != nil {
 		return nil, err
+	}
+	if strategy != "" && !migrate.ValidAlterFieldStrategy(strategy) {
+		return nil, fmt.Errorf("alter_field: invalid strategy %q (must be cast or drop_create)", strategy)
 	}
 	of, err := dictToField(oldField)
 	if err != nil {
@@ -634,7 +639,12 @@ func (b *StarlarkBuiltins) builtinAlterField(_ *starlark.Thread, _ *starlark.Bui
 	if err != nil {
 		return nil, fmt.Errorf("alter_field: new_field: %w", err)
 	}
-	return &opValue{op: &migrate.AlterField{Table: table, OldField: of, NewField: nf}}, nil
+	return &opValue{op: &migrate.AlterField{
+		Table:    table,
+		OldField: of,
+		NewField: nf,
+		Strategy: migrate.AlterFieldStrategy(strategy),
+	}}, nil
 }
 
 // builtinRenameField implements rename_field(table, old_name, new_name) → opValue.

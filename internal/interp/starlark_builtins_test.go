@@ -3,6 +3,7 @@ package interp
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ocomsoft/morphic/migrate"
@@ -312,6 +313,55 @@ migration(
 	}
 	if !af.NewField.Nullable {
 		t.Error("expected new field to be nullable")
+	}
+}
+
+func TestStarlarkBuiltin_AlterField_Strategy(t *testing.T) {
+	b := execStar(t, `
+migration(
+    name = "test",
+    operations = [
+        alter_field(
+            table = "sessions",
+            old_field = field("data", "text"),
+            new_field = field("data", "bytes"),
+            strategy = "drop_create",
+        ),
+    ],
+)
+`)
+	m := b.Collected()
+	af, ok := m.Operations[0].(*migrate.AlterField)
+	if !ok {
+		t.Fatalf("expected *migrate.AlterField, got %T", m.Operations[0])
+	}
+	if af.Strategy != migrate.AlterStrategyDropCreate {
+		t.Errorf("expected strategy %q, got %q", migrate.AlterStrategyDropCreate, af.Strategy)
+	}
+}
+
+func TestStarlarkBuiltin_AlterField_InvalidStrategy(t *testing.T) {
+	builtins := NewStarlarkBuiltins()
+	thread := &starlark.Thread{Name: "test"}
+	src := `
+migration(
+    name = "test",
+    operations = [
+        alter_field(
+            table = "sessions",
+            old_field = field("data", "text"),
+            new_field = field("data", "bytes"),
+            strategy = "bogus",
+        ),
+    ],
+)
+`
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", src, builtins.Env())
+	if err == nil {
+		t.Fatal("expected error for invalid strategy, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid strategy") {
+		t.Errorf("expected error to contain %q, got %q", "invalid strategy", err.Error())
 	}
 }
 

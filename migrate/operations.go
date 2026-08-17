@@ -64,6 +64,25 @@ type ErrorIgnorer interface {
 	ShouldIgnoreErrors() bool
 }
 
+// AlterFieldStrategy controls how alter_field handles column type changes.
+type AlterFieldStrategy string
+
+const (
+	// AlterStrategyCast uses a direct ALTER COLUMN ... TYPE (default, current behavior).
+	AlterStrategyCast AlterFieldStrategy = "cast"
+	// AlterStrategyDropCreate drops the old column and adds the new one. Always works but loses data.
+	AlterStrategyDropCreate AlterFieldStrategy = "drop_create"
+)
+
+// ValidAlterFieldStrategy returns true if s is a recognized alter_field strategy (or empty for default).
+func ValidAlterFieldStrategy(s string) bool {
+	switch AlterFieldStrategy(s) {
+	case AlterStrategyCast, AlterStrategyDropCreate, "":
+		return true
+	}
+	return false
+}
+
 // boolPtr converts a bool value to a *bool pointer for use with types.Field.Nullable.
 func boolPtr(b bool) *bool { return &b }
 
@@ -429,6 +448,9 @@ type AlterField struct {
 	Table    string
 	OldField Field
 	NewField Field
+	// Strategy controls how the column change is applied. Empty defaults to
+	// AlterStrategyCast (direct ALTER COLUMN ... TYPE, current behavior).
+	Strategy AlterFieldStrategy
 }
 
 // TypeName returns the operation type identifier.
@@ -437,12 +459,20 @@ func (op *AlterField) TypeName() string { return "alter_field" }
 // TableName returns the name of the table being altered.
 func (op *AlterField) TableName() string { return op.Table }
 
-// IsDestructive returns false — altering a column is not considered destructive
-// (though data conversion may fail at the database level for incompatible types).
-func (op *AlterField) IsDestructive() bool { return false }
+// IsDestructive returns true only for the drop_create strategy, which drops
+// the existing column (losing its data) before adding the new one. The
+// default cast strategy is not considered destructive, though data
+// conversion may still fail at the database level for incompatible types.
+func (op *AlterField) IsDestructive() bool {
+	return op.Strategy == AlterStrategyDropCreate
+}
 
-// Describe returns a human-readable description of this operation.
+// Describe returns a human-readable description of this operation. When a
+// non-default strategy is set, it is included in the description.
 func (op *AlterField) Describe() string {
+	if op.Strategy != "" && op.Strategy != AlterStrategyCast {
+		return fmt.Sprintf("Alter field %s.%s (strategy: %s)", op.Table, op.NewField.Name, op.Strategy)
+	}
 	return fmt.Sprintf("Alter field %s.%s", op.Table, op.NewField.Name)
 }
 
@@ -470,37 +500,61 @@ func tableStateToTypesTable(state *SchemaState, tableName string, defaults map[s
 	return t
 }
 
-// Up generates the ALTER COLUMN SQL to apply the new field definition.
-// If the provider implements TableRecreationProvider (e.g. SQLite), the full
+// Up generates the SQL to apply the new field definition, routed by Strategy.
+// The default (AlterStrategyCast, or empty) uses a direct ALTER COLUMN ... TYPE;
+// if the provider implements TableRecreationProvider (e.g. SQLite), the full
 // current table definition is passed so the provider can recreate the table.
+// AlterStrategyDropCreate instead drops the old column and adds the new one,
+// which always works but loses the column's existing data.
 // Field defaults are resolved against the active defaults map before use.
 func (op *AlterField) Up(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	oldF := toTypesField(op.OldField)
 	newF := toTypesField(op.NewField)
 	resolveFieldDefault(oldF, defaults)
 	resolveFieldDefault(newF, defaults)
-	if trp, ok := p.(providers.TableRecreationProvider); ok {
-		t := tableStateToTypesTable(state, op.Table, defaults)
-		return trp.GenerateAlterColumnWithTable(t, oldF, newF)
+
+	switch op.Strategy {
+	case AlterStrategyDropCreate:
+		drop := p.GenerateDropColumn(op.Table, oldF.Name)
+		add := p.GenerateAddColumn(op.Table, newF)
+		return drop + "\n" + add, nil
+
+	default:
+		if trp, ok := p.(providers.TableRecreationProvider); ok {
+			t := tableStateToTypesTable(state, op.Table, defaults)
+			return trp.GenerateAlterColumnWithTable(t, oldF, newF)
+		}
+		return p.GenerateAlterColumn(op.Table, oldF, newF)
 	}
-	return p.GenerateAlterColumn(op.Table, oldF, newF)
 }
 
-// Down generates the ALTER COLUMN SQL to restore the original field definition.
-// If the provider implements TableRecreationProvider (e.g. SQLite), the full
-// current table definition is passed so the provider can recreate the table.
+// Down generates the SQL to restore the original field definition, routed by
+// Strategy. The default (AlterStrategyCast, or empty) uses a direct
+// ALTER COLUMN ... TYPE; if the provider implements TableRecreationProvider
+// (e.g. SQLite), the full current table definition is passed so the provider
+// can recreate the table. AlterStrategyDropCreate instead drops the new
+// column and adds back the old one, which always works but loses data.
 // Field defaults are resolved against the active defaults map before use.
 func (op *AlterField) Down(p providers.Provider, state *SchemaState, defaults map[string]string, _ string) (string, error) {
 	oldF := toTypesField(op.OldField)
 	newF := toTypesField(op.NewField)
 	resolveFieldDefault(oldF, defaults)
 	resolveFieldDefault(newF, defaults)
-	if trp, ok := p.(providers.TableRecreationProvider); ok {
-		// For Down, state reflects the post-Up schema; pass newF→oldF to recreate to original.
-		t := tableStateToTypesTable(state, op.Table, defaults)
-		return trp.GenerateAlterColumnWithTable(t, newF, oldF)
+
+	switch op.Strategy {
+	case AlterStrategyDropCreate:
+		drop := p.GenerateDropColumn(op.Table, newF.Name)
+		add := p.GenerateAddColumn(op.Table, oldF)
+		return drop + "\n" + add, nil
+
+	default:
+		if trp, ok := p.(providers.TableRecreationProvider); ok {
+			// For Down, state reflects the post-Up schema; pass newF→oldF to recreate to original.
+			t := tableStateToTypesTable(state, op.Table, defaults)
+			return trp.GenerateAlterColumnWithTable(t, newF, oldF)
+		}
+		return p.GenerateAlterColumn(op.Table, newF, oldF)
 	}
-	return p.GenerateAlterColumn(op.Table, newF, oldF)
 }
 
 // Mutate replaces the field in the table's entry in SchemaState.

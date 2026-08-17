@@ -212,6 +212,63 @@ func TestConvertMigrationToStarlark_InitialFalse(t *testing.T) {
 	}
 }
 
+// TestConvertMigrationToStarlark_AlterFieldStrategy verifies that a non-default
+// AlterField.Strategy (drop_create) is emitted as a strategy kwarg, while the
+// default cast strategy and an unset strategy are omitted from the output.
+func TestConvertMigrationToStarlark_AlterFieldStrategy(t *testing.T) {
+	tests := []struct {
+		name         string
+		strategy     migrate.AlterFieldStrategy
+		wantContains string
+		wantAbsent   string
+	}{
+		{
+			name:         "drop_create strategy is emitted",
+			strategy:     migrate.AlterStrategyDropCreate,
+			wantContains: `strategy = "drop_create"`,
+		},
+		{
+			name:       "empty strategy is omitted",
+			strategy:   "",
+			wantAbsent: "strategy =",
+		},
+		{
+			name:       "cast strategy is omitted",
+			strategy:   migrate.AlterStrategyCast,
+			wantAbsent: "strategy =",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &migrate.Migration{
+				Name:         "0007_alter_strategy",
+				Dependencies: []string{},
+				Operations: []migrate.Operation{
+					&migrate.AlterField{
+						Table:    "users",
+						OldField: migrate.Field{Name: "email", Type: "varchar", Length: 100},
+						NewField: migrate.Field{Name: "email", Type: "varchar", Length: 255},
+						Strategy: tt.strategy,
+					},
+				},
+			}
+
+			src, err := codegen.ConvertMigrationToStarlark(m)
+			if err != nil {
+				t.Fatalf("ConvertMigrationToStarlark: %v", err)
+			}
+
+			if tt.wantContains != "" && !strings.Contains(src, tt.wantContains) {
+				t.Errorf("expected output to contain %q, got:\n%s", tt.wantContains, src)
+			}
+			if tt.wantAbsent != "" && strings.Contains(src, tt.wantAbsent) {
+				t.Errorf("expected output NOT to contain %q, got:\n%s", tt.wantAbsent, src)
+			}
+		})
+	}
+}
+
 // TestConvertAirRadiators_AllFiles loads the converted AirRadiators .star files
 // if the output directory exists (from a prior convert run).
 func TestConvertAirRadiators_AllFiles(t *testing.T) {

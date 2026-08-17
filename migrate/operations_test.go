@@ -690,3 +690,106 @@ func TestDropForeignKey_Down_WithOnUpdate(t *testing.T) {
 		t.Errorf("expected stored constraint name fk_orders_user_id in Down SQL, got: %s", downSQL)
 	}
 }
+
+func TestAlterFieldIsDestructive(t *testing.T) {
+	tests := []struct {
+		strategy    migrate.AlterFieldStrategy
+		destructive bool
+	}{
+		{"", false},
+		{migrate.AlterStrategyCast, false},
+		{migrate.AlterStrategyDropCreate, true},
+	}
+	for _, tt := range tests {
+		op := &migrate.AlterField{
+			Table:    "t",
+			OldField: migrate.Field{Name: "f", Type: "text"},
+			NewField: migrate.Field{Name: "f", Type: "bytes"},
+			Strategy: tt.strategy,
+		}
+		if got := op.IsDestructive(); got != tt.destructive {
+			t.Errorf("strategy=%q: IsDestructive()=%v, want %v", tt.strategy, got, tt.destructive)
+		}
+	}
+}
+
+func TestAlterFieldDescribeWithStrategy(t *testing.T) {
+	op := &migrate.AlterField{
+		Table:    "sessions",
+		OldField: migrate.Field{Name: "data", Type: "text"},
+		NewField: migrate.Field{Name: "data", Type: "bytes"},
+		Strategy: migrate.AlterStrategyDropCreate,
+	}
+	desc := op.Describe()
+	if !strings.Contains(desc, "drop_create") {
+		t.Errorf("Describe() = %q, want it to contain strategy", desc)
+	}
+}
+
+func TestValidAlterFieldStrategy(t *testing.T) {
+	if !migrate.ValidAlterFieldStrategy("cast") {
+		t.Error("cast should be valid")
+	}
+	if !migrate.ValidAlterFieldStrategy("drop_create") {
+		t.Error("drop_create should be valid")
+	}
+	if !migrate.ValidAlterFieldStrategy("") {
+		t.Error("empty should be valid (defaults to cast)")
+	}
+	if migrate.ValidAlterFieldStrategy("bogus") {
+		t.Error("bogus should be invalid")
+	}
+}
+
+func TestAlterFieldUpDropCreate(t *testing.T) {
+	p := postgresql.New()
+	state := migrate.NewSchemaState()
+	_ = state.AddTable("sessions", []migrate.Field{
+		{Name: "id", Type: "integer", PrimaryKey: true},
+		{Name: "data", Type: "text"},
+	}, nil)
+	op := &migrate.AlterField{
+		Table:    "sessions",
+		OldField: migrate.Field{Name: "data", Type: "text"},
+		NewField: migrate.Field{Name: "data", Type: "bytes"},
+		Strategy: migrate.AlterStrategyDropCreate,
+	}
+	sql, err := op.Up(p, state, nil, "")
+	if err != nil {
+		t.Fatalf("Up: %v", err)
+	}
+	if !strings.Contains(sql, "DROP COLUMN") {
+		t.Errorf("expected DROP COLUMN in Up SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "ADD COLUMN") {
+		t.Errorf("expected ADD COLUMN in Up SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "ALTER COLUMN") && strings.Contains(sql, "TYPE") {
+		t.Errorf("did not expect ALTER COLUMN ... TYPE in drop_create Up SQL, got: %s", sql)
+	}
+}
+
+func TestAlterFieldDownDropCreate(t *testing.T) {
+	p := postgresql.New()
+	state := migrate.NewSchemaState()
+	_ = state.AddTable("sessions", []migrate.Field{
+		{Name: "id", Type: "integer", PrimaryKey: true},
+		{Name: "data", Type: "bytes"},
+	}, nil)
+	op := &migrate.AlterField{
+		Table:    "sessions",
+		OldField: migrate.Field{Name: "data", Type: "text"},
+		NewField: migrate.Field{Name: "data", Type: "bytes"},
+		Strategy: migrate.AlterStrategyDropCreate,
+	}
+	sql, err := op.Down(p, state, nil, "")
+	if err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	if !strings.Contains(sql, "DROP COLUMN") {
+		t.Errorf("expected DROP COLUMN in Down SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "ADD COLUMN") {
+		t.Errorf("expected ADD COLUMN in Down SQL, got: %s", sql)
+	}
+}

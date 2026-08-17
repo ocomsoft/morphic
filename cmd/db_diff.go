@@ -28,7 +28,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -121,16 +120,7 @@ func runDBDiff(cmd *cobra.Command) error {
 	// Load DAG schema by checking for existing migration files
 	var dagSchema *yamlpkg.Schema
 
-	// filepath.Glob only errors on malformed patterns; "*.go" is always valid.
-	goFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
-
-	// Filter out main.go from the migration file list
-	var migrationFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migrationFiles = append(migrationFiles, f)
-		}
-	}
+	migrationFiles, _ := countMigrationFiles(migrationsDir)
 
 	if len(migrationFiles) > 0 {
 		dagOutput, dagErr := queryDAG(migrationsDir, verbose)

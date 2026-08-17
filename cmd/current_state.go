@@ -25,7 +25,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -68,16 +67,9 @@ func runCurrentState(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault(cfgFile)
 	migrationsDir := cfg.Migration.Directory
 
-	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	migFiles, err := countMigrationFiles(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("scanning migrations directory: %w", err)
-	}
-
-	var migFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migFiles = append(migFiles, f)
-		}
 	}
 
 	if len(migFiles) == 0 {

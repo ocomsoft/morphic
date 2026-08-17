@@ -660,13 +660,8 @@ func countMigrationFiles(migrationsDir string) ([]string, error) {
 // leaves but contains no operations, thus unifying the DAG.
 func goGenerateMerge(migrationsDir string, dagOut *migrate.DAGOutput, dryRun, verbose bool) error {
 	// Count existing migration files
-	count := 0
-	goFiles, _ := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			count++
-		}
-	}
+	allMigFiles, _ := countMigrationFiles(migrationsDir)
+	count := len(allMigFiles)
 
 	name := fmt.Sprintf("%s_merge_%s", codegen.NextMigrationNumber(count),
 		strings.Join(dagOut.Leaves, "_and_"))

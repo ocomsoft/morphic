@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -76,16 +75,9 @@ func runDiff(_ *cobra.Command, _ []string) error {
 	// 1. Query existing DAG for previous schema state
 	var prevSchema *yamlpkg.Schema
 
-	goFiles, err := filepath.Glob(filepath.Join(migrationsDir, "*.go"))
+	migFiles, err := countMigrationFiles(migrationsDir)
 	if err != nil {
 		return fmt.Errorf("scanning migrations directory: %w", err)
-	}
-
-	var migFiles []string
-	for _, f := range goFiles {
-		if filepath.Base(f) != "main.go" {
-			migFiles = append(migFiles, f)
-		}
 	}
 
 	if len(migFiles) > 0 {

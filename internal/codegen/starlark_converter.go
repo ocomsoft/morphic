@@ -188,8 +188,12 @@ func convertDropField(op *migrate.DropField) string {
 }
 
 func convertAlterField(op *migrate.AlterField) string {
-	return fmt.Sprintf("        alter_field(%q,\n            old_field = %s,\n            new_field = %s,\n        ),\n",
-		op.Table, migrateFieldToStarlark(op.OldField), migrateFieldToStarlark(op.NewField))
+	extra := ""
+	if op.Strategy != "" && op.Strategy != migrate.AlterStrategyCast {
+		extra = fmt.Sprintf(",\n            strategy = %q", string(op.Strategy))
+	}
+	return fmt.Sprintf("        alter_field(%q,\n            old_field = %s,\n            new_field = %s%s,\n        ),\n",
+		op.Table, migrateFieldToStarlark(op.OldField), migrateFieldToStarlark(op.NewField), extra)
 }
 
 func convertRenameField(op *migrate.RenameField) string {

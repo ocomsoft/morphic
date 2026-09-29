@@ -618,6 +618,62 @@ func TestScanner_ResolveModulePath_NotFound(t *testing.T) {
 	}
 }
 
+func TestScanner_ScanStarlarkModules_SkipsWorktrees(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "scanner_worktree_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	oldWd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err = os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	goModContent := "module test/module\n\ngo 1.21\n"
+	if err := os.WriteFile("go.mod", []byte(goModContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a real schema
+	realSchemaDir := filepath.Join("modules", "tenant", "schema")
+	if err := os.MkdirAll(realSchemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realSchemaDir, "schema.star"), []byte(`database(name="tenant", version="1.0")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a worktree directory (has a .git file, not directory)
+	worktreeDir := filepath.Join("worktrees", "feature-branch")
+	worktreeSchemaDir := filepath.Join(worktreeDir, "modules", "tenant", "schema")
+	if err := os.MkdirAll(worktreeSchemaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktreeSchemaDir, "schema.star"), []byte(`database(name="tenant", version="1.0")`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// A git worktree has a .git file (not directory) pointing to the main repo
+	if err := os.WriteFile(filepath.Join(worktreeDir, ".git"), []byte("gitdir: /some/repo/.git/worktrees/feature-branch\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(false)
+	schemas, err := s.ScanStarlarkModules()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if len(schemas) != 1 {
+		t.Fatalf("Expected 1 schema (worktree should be skipped), got %d", len(schemas))
+	}
+
+	if !strings.Contains(schemas[0].FilePath, filepath.Join("modules", "tenant")) {
+		t.Errorf("Expected schema from modules/tenant, got: %s", schemas[0].FilePath)
+	}
+}
+
 func TestScanner_readSchemaFile(t *testing.T) {
 	tests := []struct {
 		name           string

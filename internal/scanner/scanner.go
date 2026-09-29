@@ -205,6 +205,14 @@ func (s *Scanner) findAllSchemasInPathWithType(basePath, modulePath string, sche
 			return nil // Continue walking even if there's an error with this path
 		}
 
+		// Skip git worktrees and submodules (directories with a .git file, not directory)
+		if d.IsDir() && path != basePath {
+			dotGitPath := filepath.Join(path, ".git")
+			if info, statErr := os.Lstat(dotGitPath); statErr == nil && !info.IsDir() {
+				return filepath.SkipDir
+			}
+		}
+
 		// Check if path is ignored by .gitignore
 		if gitignore != nil {
 			// Convert path to relative path from basePath
